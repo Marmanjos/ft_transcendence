@@ -23,7 +23,7 @@ services:
     secrets: admi_passwd
     networks: ft_transcendence
 
-volumes:
+#volumes:
 
 networks:
   ft_transcendence:
