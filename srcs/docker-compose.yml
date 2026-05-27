@@ -1,27 +1,27 @@
 services:
   front-end:
     build: ./requirements/front-end
-    image:
-    container_name:
-    restart:
-    secrets:
-    networks:
+    image: front-end
+    container_name: front-end
+    restart: always
+    secrets: admi_passwd
+    networks: ft_transcendence
 
   back-end:
     build: ./requirements/back-end
-    image:
-    container_name:
-    restart:
-    secrets:
-    networks:
+    image: back-end
+    container_name: back-end
+    restart: always
+    secrets: admi_passwd
+    networks: ft_transcendence
 
   data-base:
     build: ./requirements/data-base
-    image:
-    container_name:
-    restart:
-    secrets:
-    networks:
+    image: data-base
+    container_name: data-base
+    restart: always
+    secrets: admi_passwd
+    networks: ft_transcendence
 
 volumes:
 
