@@ -4,7 +4,7 @@ create:
 	@mkdir -p secrets
 	@printf '%s\n' \
 		'DOMAIN_NAME=' \
-		'DATA_BASE_NAME='
+		'DATA_BASE_NAME=' \
 		'DATA_BASE_USER=' > srcs/.env
 	@openssl rand -hex 16 > secrets/admin_passwd.txt
 
@@ -15,3 +15,10 @@ status:
 	@docker networks ls
 	@echo '\nCONTAINERS'
 	@docker ps
+
+
+all:
+	$(COMPOSE) up -d --build
+
+clean:
+	
