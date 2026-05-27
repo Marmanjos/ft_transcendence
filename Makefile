@@ -20,5 +20,15 @@ status:
 all:
 	$(COMPOSE) up -d --build
 
+down:
+	$(COMPOSE) down
+
 clean:
-	
+	$(COMPOSE) down -v --rmi all
+
+fclean: clean
+	@rm -r -rf srcs/.env secrets/
+
+re: fclean all
+
+PHONY: create status all down clean fclean re
