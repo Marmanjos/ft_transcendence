@@ -1,0 +1,34 @@
+services:
+  front-end:
+    build: ./requirements/front-end
+    image:
+    container_name:
+    restart:
+    secrets:
+    networks:
+
+  back-end:
+    build: ./requirements/back-end
+    image:
+    container_name:
+    restart:
+    secrets:
+    networks:
+
+  data-base:
+    build: ./requirements/data-base
+    image:
+    container_name:
+    restart:
+    secrets:
+    networks:
+
+volumes:
+
+networks:
+  ft_transcendence:
+    drive: bridge
+
+secrets:
+  admi_passwd:
+    file: ../secrets/admin_passwd.txt
