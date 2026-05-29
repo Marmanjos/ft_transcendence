@@ -19,7 +19,7 @@ services:
 
 networks:
   ft_transcendence:
-    drive: bridge
+    driver: bridge
 
 # secrets:
 #   admi_passwd:
