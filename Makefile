@@ -1,12 +1,13 @@
 COMPOSE = docker-compose -f srcs/docker-compose.yml
 
 create:
-	@mkdir -p secrets
 	@printf '%s\n' \
-		'DOMAIN_NAME=' \
-		'DATA_BASE_NAME=' \
-		'DATA_BASE_USER=' > srcs/.env
-	@openssl rand -hex 16 > secrets/admin_passwd.txt
+		'PORT=3001' \
+		'DATABASE_URL=postgresql://postgres:your-password@db.your-project-ref.supabase.co:5432/postgres?sslmode=require' \
+		'SESSION_SECRET=change-me-in-production' > srcs/backend/.env
+
+	@printf '%s\n' \
+		'VITE_API_BASE_URL=http://localhost:3001' > srcs/frontend/.env
 
 status:
 	@echo '\nIMAGES:'
