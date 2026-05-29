@@ -5,7 +5,7 @@ services:
     container_name: frontend
     restart: always
     ports:
-      - "3001:3001"
+      - "80:80"
     # secrets: admi_passwd
     networks:
       - ft_transcendence
@@ -16,7 +16,7 @@ services:
     container_name: backend
     restart: always
     ports:
-      - "80:80"
+      - "3001:3001"
     # secrets: admi_passwd
     networks:
       - ft_transcendence
