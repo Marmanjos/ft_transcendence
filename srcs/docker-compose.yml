@@ -15,20 +15,10 @@ services:
     secrets: admi_passwd
     networks: ft_transcendence
 
-  data-base:
-    build: ./data-base
-    image: data-base
-    container_name: database
-    restart: always
-    secrets: admi_passwd
-    networks: ft_transcendence
-
-#volumes:
-
 networks:
   ft_transcendence:
     drive: bridge
 
-secrets:
-  admi_passwd:
-    file: ../secrets/admin_passwd.txt
+# secrets:
+#   admi_passwd:
+#     file: ../secrets/admin_passwd.txt
