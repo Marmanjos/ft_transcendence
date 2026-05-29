@@ -8,7 +8,7 @@ RUN npm ci --prefer-offline --no-audit
 
 COPY . .
 
-RUN npm build
+RUN npm run build
 
 FROM debian:bookworm-slim
 
