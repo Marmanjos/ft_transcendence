@@ -31,4 +31,4 @@ fclean: clean
 
 re: fclean all
 
-PHONY: create status all down clean fclean re
+.PHONY: create status all down clean fclean re
