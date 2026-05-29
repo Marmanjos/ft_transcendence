@@ -1,0 +1,574 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Elemental Duel API — futuristic multiplayer arena game
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User profile operations
+  - name: matches
+    description: Match management
+  - name: leaderboard
+    description: Leaderboard and stats
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Username or email already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user profile by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}/stats:
+    get:
+      operationId: getUserStats
+      tags: [users]
+      summary: Get stats for a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+
+  /matches:
+    get:
+      operationId: listMatches
+      tags: [matches]
+      summary: Get match history for current user
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Match history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Match"
+    post:
+      operationId: createMatch
+      tags: [matches]
+      summary: Create a new single-player match vs AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchInput"
+      responses:
+        "201":
+          description: Match created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+
+  /matches/{id}:
+    get:
+      operationId: getMatch
+      tags: [matches]
+      summary: Get a match by ID with all rounds
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Match with rounds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchDetail"
+        "404":
+          description: Match not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /matches/{id}/rounds:
+    post:
+      operationId: submitRound
+      tags: [matches]
+      summary: Submit elemental choice for a round
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoundInput"
+      responses:
+        "200":
+          description: Round result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Round"
+        "400":
+          description: Invalid move or match not active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [leaderboard]
+      summary: Get top players leaderboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  /arena/summary:
+    get:
+      operationId: getArenaSummary
+      tags: [leaderboard]
+      summary: Get arena live summary (total players, matches today, etc.)
+      responses:
+        "200":
+          description: Arena summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArenaSummary"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    RegisterInput:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 20
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+
+    User:
+      type: object
+      required: [id, username, email, createdAt]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    UserUpdate:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 20
+        avatarUrl:
+          type: ["string", "null"]
+
+    UserStats:
+      type: object
+      required: [userId, wins, losses, draws, totalMatches, winRate, favoriteElemental]
+      properties:
+        userId:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        draws:
+          type: integer
+        totalMatches:
+          type: integer
+        winRate:
+          type: number
+        favoriteElemental:
+          type: ["string", "null"]
+
+    Elemental:
+      type: string
+      enum: [TITAN, RAZOR, WRAITH]
+
+    RoundOutcome:
+      type: string
+      enum: [WIN, LOSS, DRAW]
+
+    MatchStatus:
+      type: string
+      enum: [ACTIVE, COMPLETED, ABANDONED]
+
+    MatchMode:
+      type: string
+      enum: [SINGLE_PLAYER, MULTIPLAYER]
+
+    Match:
+      type: object
+      required: [id, player1Id, mode, status, player1Score, player2Score, createdAt]
+      properties:
+        id:
+          type: integer
+        player1Id:
+          type: integer
+        player2Id:
+          type: ["integer", "null"]
+        player1Username:
+          type: ["string", "null"]
+        player2Username:
+          type: ["string", "null"]
+        mode:
+          $ref: "#/components/schemas/MatchMode"
+        status:
+          $ref: "#/components/schemas/MatchStatus"
+        winnerId:
+          type: ["integer", "null"]
+        player1Score:
+          type: integer
+        player2Score:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+
+    MatchInput:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          $ref: "#/components/schemas/MatchMode"
+
+    Round:
+      type: object
+      required: [id, matchId, roundNumber, player1Choice, player2Choice, outcome, createdAt]
+      properties:
+        id:
+          type: integer
+        matchId:
+          type: integer
+        roundNumber:
+          type: integer
+        player1Choice:
+          $ref: "#/components/schemas/Elemental"
+        player2Choice:
+          $ref: "#/components/schemas/Elemental"
+        outcome:
+          $ref: "#/components/schemas/RoundOutcome"
+        createdAt:
+          type: string
+          format: date-time
+
+    RoundInput:
+      type: object
+      required: [elemental]
+      properties:
+        elemental:
+          $ref: "#/components/schemas/Elemental"
+
+    MatchDetail:
+      type: object
+      required: [id, player1Id, mode, status, player1Score, player2Score, rounds, createdAt]
+      properties:
+        id:
+          type: integer
+        player1Id:
+          type: integer
+        player2Id:
+          type: ["integer", "null"]
+        player1Username:
+          type: ["string", "null"]
+        player2Username:
+          type: ["string", "null"]
+        mode:
+          $ref: "#/components/schemas/MatchMode"
+        status:
+          $ref: "#/components/schemas/MatchStatus"
+        winnerId:
+          type: ["integer", "null"]
+        player1Score:
+          type: integer
+        player2Score:
+          type: integer
+        rounds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Round"
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+
+    LeaderboardEntry:
+      type: object
+      required: [rank, userId, username, wins, losses, totalMatches, winRate]
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: integer
+        username:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        wins:
+          type: integer
+        losses:
+          type: integer
+        totalMatches:
+          type: integer
+        winRate:
+          type: number
+
+    ArenaSummary:
+      type: object
+      required: [totalPlayers, matchesToday, totalMatches, activeMatches]
+      properties:
+        totalPlayers:
+          type: integer
+        matchesToday:
+          type: integer
+        totalMatches:
+          type: integer
+        activeMatches:
+          type: integer
