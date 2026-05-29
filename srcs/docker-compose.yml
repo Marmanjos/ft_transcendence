@@ -4,7 +4,7 @@ services:
     image: frontend
     container_name: frontend
     restart: always
-    secrets: admi_passwd
+    # secrets: admi_passwd
     networks: ft_transcendence
 
   back-end:
@@ -12,7 +12,7 @@ services:
     image: backend
     container_name: backend
     restart: always
-    secrets: admi_passwd
+    # secrets: admi_passwd
     networks: ft_transcendence
 
 networks:
