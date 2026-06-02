@@ -4,6 +4,8 @@ services:
     image: frontend
     container_name: frontend
     restart: always
+    env_file:
+      - ./frontend/.env
     ports:
       - "80:80"
     # secrets: admi_passwd
@@ -15,6 +17,8 @@ services:
     image: backend
     container_name: backend
     restart: always
+    env_file:
+      - ./backend/.env
     ports:
       - "3001:3001"
     # secrets: admi_passwd
