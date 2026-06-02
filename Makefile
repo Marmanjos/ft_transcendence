@@ -1,4 +1,8 @@
-COMPOSE = docker-compose -f srcs/docker-compose.yml
+DOCKER = sudo docker
+COMPOSE = $(DOCKER) compose -f srcs/docker-compose.yml
+
+all:
+	$(COMPOSE) up -d --build
 
 create:
 	@printf '%s\n' \
@@ -11,15 +15,11 @@ create:
 
 status:
 	@echo '\nIMAGES:'
-	@docker images
+	@$(DOCKER) images
 	@echo '\nNETWORKS:'
-	@docker networks ls
+	@$(DOCKER) network ls
 	@echo '\nCONTAINERS'
-	@docker ps
-
-
-all:
-	$(COMPOSE) up -d --build
+	@$(DOCKER) ps
 
 down:
 	$(COMPOSE) down
