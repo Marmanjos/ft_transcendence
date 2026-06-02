@@ -6,11 +6,11 @@ COPY package.json package-lock.json ./
 COPY build.mjs tsconfig.json tsconfig.base.json ./
 COPY src ./src
 
-RUN npm ci
+RUN npm install --prefer-offline --no-audit
 
 RUN npm run build
 
-FROM debian:bookworm-slim
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 

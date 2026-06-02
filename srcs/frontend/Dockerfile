@@ -3,8 +3,9 @@ FROM node:22-bookworm AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+COPY src/lib/api-client-react ./src/lib/api-client-react
 
-RUN npm ci --prefer-offline --no-audit
+RUN npm install --prefer-offline --no-audit
 
 COPY . .
 
