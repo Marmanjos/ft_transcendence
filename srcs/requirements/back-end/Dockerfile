@@ -1,5 +1,0 @@
-FROM debian:12
-
-EXPOSE 8080
-
-ENTRYPOINT['']
