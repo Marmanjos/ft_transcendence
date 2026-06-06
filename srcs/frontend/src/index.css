@@ -1,0 +1,204 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover-border: hsl(var(--popover-border));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-border: hsl(var(--primary-border));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-border: hsl(var(--secondary-border));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-border: hsl(var(--muted-border));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-border: hsl(var(--accent-border));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-border: hsl(var(--destructive-border));
+
+  --color-titan: hsl(var(--titan));
+  --color-razor: hsl(var(--razor));
+  --color-wraith: hsl(var(--wraith));
+
+  --font-sans: 'Space Mono', monospace, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: 'Space Mono', monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  /* Default to dark mode for the cyberpunk vibe */
+  --background: 240 10% 4%;
+  --foreground: 180 100% 90%;
+  
+  --border: 180 100% 25%;
+  --input: 180 100% 15%;
+  --ring: 180 100% 50%;
+
+  --card: 240 10% 6%;
+  --card-foreground: 180 100% 90%;
+  --card-border: 180 100% 20%;
+
+  --popover: 240 10% 6%;
+  --popover-foreground: 180 100% 90%;
+  --popover-border: 180 100% 20%;
+
+  --primary: 180 100% 50%;
+  --primary-foreground: 240 10% 4%;
+  --primary-border: 180 100% 40%;
+
+  --secondary: 320 100% 50%;
+  --secondary-foreground: 240 10% 4%;
+  --secondary-border: 320 100% 40%;
+
+  --muted: 240 10% 10%;
+  --muted-foreground: 180 30% 60%;
+  --muted-border: 240 10% 20%;
+
+  --accent: 280 100% 60%;
+  --accent-foreground: 240 10% 4%;
+  --accent-border: 280 100% 50%;
+
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 240 10% 4%;
+  --destructive-border: 0 100% 40%;
+
+  /* Elementals */
+  --titan: 30 100% 50%; /* Orange/Amber */
+  --razor: 190 100% 50%; /* Cyan/Electric Blue */
+  --wraith: 280 100% 60%; /* Purple/Magenta */
+
+  --radius: 0.25rem;
+
+  --app-font-sans: 'Space Mono', monospace;
+  --app-font-serif: 'Space Mono', monospace;
+  --app-font-mono: 'Space Mono', monospace;
+}
+
+.dark {
+  /* Same as root since we force dark mode styling */
+  --background: 240 10% 4%;
+  --foreground: 180 100% 90%;
+  
+  --border: 180 100% 25%;
+  --input: 180 100% 15%;
+  --ring: 180 100% 50%;
+
+  --card: 240 10% 6%;
+  --card-foreground: 180 100% 90%;
+  --card-border: 180 100% 20%;
+
+  --popover: 240 10% 6%;
+  --popover-foreground: 180 100% 90%;
+  --popover-border: 180 100% 20%;
+
+  --primary: 180 100% 50%;
+  --primary-foreground: 240 10% 4%;
+  --primary-border: 180 100% 40%;
+
+  --secondary: 320 100% 50%;
+  --secondary-foreground: 240 10% 4%;
+  --secondary-border: 320 100% 40%;
+
+  --muted: 240 10% 10%;
+  --muted-foreground: 180 30% 60%;
+  --muted-border: 240 10% 20%;
+
+  --accent: 280 100% 60%;
+  --accent-foreground: 240 10% 4%;
+  --accent-border: 280 100% 50%;
+
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 240 10% 4%;
+  --destructive-border: 0 100% 40%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    background-image: radial-gradient(circle at center, rgba(0, 255, 255, 0.05) 0%, transparent 70%);
+    background-size: cover;
+    background-attachment: fixed;
+  }
+}
+
+/* Custom Cyberpunk Utilities */
+@layer utilities {
+  .neon-text {
+    text-shadow: 0 0 5px hsl(var(--primary)), 0 0 10px hsl(var(--primary));
+  }
+  .neon-text-secondary {
+    text-shadow: 0 0 5px hsl(var(--secondary)), 0 0 10px hsl(var(--secondary));
+  }
+  .neon-text-destructive {
+    text-shadow: 0 0 5px hsl(var(--destructive)), 0 0 10px hsl(var(--destructive));
+  }
+  
+  .neon-box {
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.5), inset 0 0 10px hsl(var(--primary) / 0.5);
+    border: 1px solid hsl(var(--primary));
+  }
+  .neon-box-secondary {
+    box-shadow: 0 0 10px hsl(var(--secondary) / 0.5), inset 0 0 10px hsl(var(--secondary) / 0.5);
+    border: 1px solid hsl(var(--secondary));
+  }
+  .neon-box-destructive {
+    box-shadow: 0 0 10px hsl(var(--destructive) / 0.5), inset 0 0 10px hsl(var(--destructive) / 0.5);
+    border: 1px solid hsl(var(--destructive));
+  }
+
+  /* Scanline effect */
+  .scanlines {
+    position: relative;
+  }
+  .scanlines::before {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(255,255,255,0),
+      rgba(255,255,255,0) 50%,
+      rgba(0,0,0,0.2) 50%,
+      rgba(0,0,0,0.2)
+    );
+    background-size: 100% 4px;
+    z-index: 50;
+    pointer-events: none;
+  }
+}
