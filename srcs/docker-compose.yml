@@ -1,34 +1,34 @@
 services:
   front-end:
-    build: ./requirements/front-end
-    image: front-end
-    container_name: front-end
+    build: ./frontend
+    image: frontend
+    container_name: frontend
     restart: always
-    secrets: admi_passwd
-    networks: ft_transcendence
+    env_file:
+      - ./frontend/.env
+    ports:
+      - "80:80"
+    # secrets: admi_passwd
+    networks:
+      - ft_transcendence
 
   back-end:
-    build: ./requirements/back-end
-    image: back-end
-    container_name: back-end
+    build: ./backend
+    image: backend
+    container_name: backend
     restart: always
-    secrets: admi_passwd
-    networks: ft_transcendence
-
-  data-base:
-    build: ./requirements/data-base
-    image: data-base
-    container_name: data-base
-    restart: always
-    secrets: admi_passwd
-    networks: ft_transcendence
-
-#volumes:
+    env_file:
+      - ./backend/.env
+    ports:
+      - "3001:3001"
+    # secrets: admi_passwd
+    networks:
+      - ft_transcendence
 
 networks:
   ft_transcendence:
-    drive: bridge
+    driver: bridge
 
-secrets:
-  admi_passwd:
-    file: ../secrets/admin_passwd.txt
+# secrets:
+#   admi_passwd:
+#     file: ../secrets/admin_passwd.txt
