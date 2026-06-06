@@ -1,2 +1,2 @@
-srcs/.env
-secrets
+srcs/frontend/.env
+srcs/backend/.env
