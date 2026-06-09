@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Elemental } from "@workspace/api-client-react";
+import { getElementalAsset } from "@/hooks/use-elemental-asset";
 
 interface ElementalCardProps {
   type: Elemental;
@@ -91,12 +92,12 @@ export function ElementalCard({ type, selected, disabled, onClick, size = "md" }
       </div>
 
       <div className="relative z-10 flex-1 flex items-center justify-center w-full">
-        <div 
-          className="text-4xl md:text-6xl font-black opacity-80"
-          style={{ color: config.color, textShadow: `0 0 20px ${config.color}` }}
-        >
-          {config.name.charAt(0)}
-        </div>
+        <img
+          src={getElementalAsset(type, 0)}
+          alt={config.name}
+          className="w-4/5 h-4/5 object-contain drop-shadow-lg"
+          style={{ opacity: 0.95 }}
+        />
       </div>
 
       <div className="relative z-10 w-full text-center">
