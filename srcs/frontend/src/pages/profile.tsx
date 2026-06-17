@@ -1,3 +1,4 @@
+import { useAuth } from "@/hooks/use-auth"; //acabei de adicionar issso
 import { useGetUser, useGetUserStats, useListMatches } from "@workspace/api-client-react";
 import { Elemental } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -5,6 +6,7 @@ import { Link } from "wouter";
 import { User as UserIcon, Activity, Crosshair, Target } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Edit } from "lucide-react";
 
 const ElementalName = {
   [Elemental.TITAN]: "TITAN",
@@ -13,9 +15,10 @@ const ElementalName = {
 };
 
 export default function Profile({ id }: { id: number }) {
+  const { user: authUser } = useAuth(); //acabei de adicionar
   const { data: user, isLoading: loadingUser } = useGetUser(id, { query: { queryKey: ["/api/users", id], enabled: !!id } });
   const { data: stats, isLoading: loadingStats } = useGetUserStats(id, { query: { queryKey: ["/api/users", id, "stats"], enabled: !!id } });
-  
+  const isOwnProfile = authUser?.id === user?.id;
   // Note: we fetch global matches and filter client side for now, or just show recent since ListMatches doesn't take a userId param in the provided schema.
   // Actually ListMatches says "Get match history for current user", so if this profile is not the current user, we can't see their matches via listMatches.
   // We'll skip matches if it's not the current user, but the schema doesn't provide a way to check. Let's just show the stats.
@@ -35,19 +38,21 @@ export default function Profile({ id }: { id: number }) {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row items-center gap-8 bg-card/50 border border-primary/20 p-8 rounded-xl backdrop-blur relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-10">
-          <UserIcon className="w-32 h-32" />
-        </div>
-        
+
         <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box">
           {user.username.charAt(0)}
         </div>
         
         <div className="text-center md:text-left z-10">
-          <h1 className="text-4xl font-black uppercase tracking-widest neon-text text-white">{user.username}</h1>
+          <h1 className="text-4xl font-black uppercase tracking-widest neon-text text-white">
+            {user.username}
+            {isOwnProfile && (<button> <Edit className="w-6 h-6" /></button>)}
+          </h1>
+
           <p className="text-muted-foreground font-mono mt-2 uppercase text-sm">
             Recrutado em: {format(new Date(user.createdAt), "dd 'de' MMMM, yyyy", { locale: ptBR })}
           </p>
+
         </div>
       </div>
 
