@@ -7,6 +7,7 @@ import { User as UserIcon, Activity, Crosshair, Target } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Edit } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const ElementalName = {
   [Elemental.TITAN]: "TITAN",
@@ -15,6 +16,7 @@ const ElementalName = {
 };
 
 export default function Profile({ id }: { id: number }) {
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const { user: authUser } = useAuth(); //acabei de adicionar
   const { data: user, isLoading: loadingUser } = useGetUser(id, { query: { queryKey: ["/api/users", id], enabled: !!id } });
   const { data: stats, isLoading: loadingStats } = useGetUserStats(id, { query: { queryKey: ["/api/users", id, "stats"], enabled: !!id } });
@@ -46,7 +48,11 @@ export default function Profile({ id }: { id: number }) {
         <div className="text-center md:text-left z-10">
           <h1 className="text-4xl font-black uppercase tracking-widest neon-text text-white">
             {user.username}
-            {isOwnProfile && (<button> <Edit className="w-6 h-6" /></button>)}
+            {isOwnProfile && (
+              <button onClick={() => setIsEditOpen(true)}>
+                <Edit className="w-4 h-4" />
+              </button>
+            )}
           </h1>
 
           <p className="text-muted-foreground font-mono mt-2 uppercase text-sm">
@@ -105,6 +111,30 @@ export default function Profile({ id }: { id: number }) {
           </CardContent>
         </Card>
       </div>
+      {isEditOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center">
+          <div className="bg-card p-6 rounded-xl w-[400px] space-y-4">
+            
+            <h2 className="text-xl font-bold">Editar perfil</h2>
+
+            <input
+              className="w-full p-2 rounded bg-background border"
+              defaultValue={user.username}
+            />
+
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setIsEditOpen(false)}>
+                Cancelar
+              </button>
+
+              <button>
+                Guardar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
