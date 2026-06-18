@@ -31,8 +31,19 @@ export default function Profile({ id }: { id: number }) {
   // We'll skip matches if it's not the current user, but the schema doesn't provide a way to check. Let's just show the stats.
 
   const handleSave = async () => {
-    console.log("Salvar: ", username);
-  }
+    try {
+      await updateUser.mutateAsync({
+        id: user.id,
+        data: {
+          username: username.trim(),
+        },
+      });
+
+      setIsEditOpen(false);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   if (loadingUser || loadingStats) {
     return (
