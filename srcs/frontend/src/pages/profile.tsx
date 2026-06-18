@@ -45,6 +45,26 @@ export default function Profile({ id }: { id: number }) {
         },
       });
 
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append("avatar", avatarFile);
+
+        await fetch("/api/users/me/avatar", {
+          method: "POST",
+          body: formData,
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("elemental_duel_token")}`,
+          },
+        });
+
+        queryClient.invalidateQueries({
+          queryKey: ["/api/users", user.id],
+        });
+
+        queryClient.invalidateQueries({
+          queryKey: ["/api/auth/me"],
+        });
+      }
       queryClient.invalidateQueries({
         queryKey: ["/api/users", user.id],
       });
