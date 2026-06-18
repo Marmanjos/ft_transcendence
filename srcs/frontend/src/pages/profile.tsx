@@ -8,6 +8,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Edit } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useUpdateUser } from "@/lib/api-client-react/src/generated/api";
+
 
 const ElementalName = {
   [Elemental.TITAN]: "TITAN",
@@ -16,7 +18,10 @@ const ElementalName = {
 };
 
 export default function Profile({ id }: { id: number }) {
+  const updateUser = useUpdateUser();
+  const [username, setUsername] = useState("");
   const [isEditOpen, setIsEditOpen] = useState(false);
+
   const { user: authUser } = useAuth(); //acabei de adicionar
   const { data: user, isLoading: loadingUser } = useGetUser(id, { query: { queryKey: ["/api/users", id], enabled: !!id } });
   const { data: stats, isLoading: loadingStats } = useGetUserStats(id, { query: { queryKey: ["/api/users", id, "stats"], enabled: !!id } });
@@ -24,6 +29,10 @@ export default function Profile({ id }: { id: number }) {
   // Note: we fetch global matches and filter client side for now, or just show recent since ListMatches doesn't take a userId param in the provided schema.
   // Actually ListMatches says "Get match history for current user", so if this profile is not the current user, we can't see their matches via listMatches.
   // We'll skip matches if it's not the current user, but the schema doesn't provide a way to check. Let's just show the stats.
+
+  const handleSave = async () => {
+    console.log("Salvar: ", username);
+  }
 
   if (loadingUser || loadingStats) {
     return (
@@ -49,7 +58,9 @@ export default function Profile({ id }: { id: number }) {
           <h1 className="text-4xl font-black uppercase tracking-widest neon-text text-white">
             {user.username}
             {isOwnProfile && (
-              <button onClick={() => setIsEditOpen(true)}>
+              <button onClick={() => {setUsername(user.username);
+                setIsEditOpen(true)
+                }}>
                 <Edit className="w-4 h-4" />
               </button>
             )}
@@ -111,6 +122,7 @@ export default function Profile({ id }: { id: number }) {
           </CardContent>
         </Card>
       </div>
+
       {isEditOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center">
           <div className="bg-card p-6 rounded-xl w-[400px] space-y-4">
@@ -119,7 +131,8 @@ export default function Profile({ id }: { id: number }) {
 
             <input
               className="w-full p-2 rounded bg-background border"
-              defaultValue={user.username}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
 
             <div className="flex justify-end gap-2">
@@ -127,7 +140,7 @@ export default function Profile({ id }: { id: number }) {
                 Cancelar
               </button>
 
-              <button>
+              <button onClick={handleSave}>
                 Guardar
               </button>
             </div>
