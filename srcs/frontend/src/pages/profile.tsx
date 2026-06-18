@@ -25,6 +25,9 @@ export default function Profile({ id }: { id: number }) {
   const [username, setUsername] = useState("");
   const [isEditOpen, setIsEditOpen] = useState(false);
 
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
   const { user: authUser } = useAuth(); //acabei de adicionar
   const { data: user, isLoading: loadingUser } = useGetUser(id, { query: { queryKey: ["/api/users", id], enabled: !!id } });
   const { data: stats, isLoading: loadingStats } = useGetUserStats(id, { query: { queryKey: ["/api/users", id, "stats"], enabled: !!id } });
@@ -63,6 +66,20 @@ export default function Profile({ id }: { id: number }) {
         variant: "destructive",
       });
     }
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarFile(file);
+
+    const preview = URL.createObjectURL(file);
+
+    setAvatarPreview((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return preview;
+    });
   };
 
   if (loadingUser || loadingStats) {
@@ -164,17 +181,18 @@ export default function Profile({ id }: { id: number }) {
 
               <div className="flex items-center justify-center w-full">
                 <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box">
-                  <button onClick={() => console.log('Elemental clicked')}>
-                    <Upload className="w-20 h-20" />
+                  <button onClick={() => document.getElementById("avatar-upload")?.click()}>
+                    {avatarPreview ? (
+                      <img src={avatarPreview} className="w-full h-full rounded-full object-cover"/>
+                    ) : (<Upload className="w-20 h-20" />)}
                   </button>
+
+                  <input type="file" accept="image/*" className="hidden" id="avatar-upload" onChange={onFileChange}/>
                 </div>
               </div>
 
-            <input
-              className="w-full p-2 rounded bg-background border"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
+            <input className="w-full p-2 rounded bg-background border" value={username}
+              onChange={(e) => setUsername(e.target.value)}/>
 
             <div className="flex justify-end gap-2">
               <button onClick={() => setIsEditOpen(false)}>
