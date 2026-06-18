@@ -10,6 +10,7 @@ import { Edit } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useUpdateUser } from "@/lib/api-client-react/src/generated/api";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 const ElementalName = {
   [Elemental.TITAN]: "TITAN",
@@ -20,6 +21,7 @@ const ElementalName = {
 export default function Profile({ id }: { id: number }) {
   const { toast } = useToast();
   const updateUser = useUpdateUser();
+  const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
   const [isEditOpen, setIsEditOpen] = useState(false);
 
@@ -38,6 +40,14 @@ export default function Profile({ id }: { id: number }) {
         data: {
           username: username.trim(),
         },
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["/api/users", user.id],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["/api/users", user.id, "stats"],
       });
 
       setIsEditOpen(false);
