@@ -6,7 +6,7 @@ import { Link } from "wouter";
 import { User as UserIcon, Activity, Crosshair, Target } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Edit } from "lucide-react";
+import { Edit, Upload } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useUpdateUser } from "@/lib/api-client-react/src/generated/api";
 import { useToast } from "@/hooks/use-toast";
@@ -157,8 +157,18 @@ export default function Profile({ id }: { id: number }) {
       {isEditOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center">
           <div className="bg-card p-6 rounded-xl w-[400px] space-y-4">
-            
-            <h2 className="text-xl font-bold">Editar perfil</h2>
+
+              <div className="flex items-center justify-center w-full">
+                <h2 className="text-xl font-bold">Editar perfil</h2>
+              </div>
+
+              <div className="flex items-center justify-center w-full">
+                <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box">
+                  <button onClick={() => console.log('Elemental clicked')}>
+                    <Upload className="w-20 h-20" />
+                  </button>
+                </div>
+              </div>
 
             <input
               className="w-full p-2 rounded bg-background border"
