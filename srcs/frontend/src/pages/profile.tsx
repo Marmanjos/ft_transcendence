@@ -9,7 +9,7 @@ import { ptBR } from "date-fns/locale";
 import { Edit } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useUpdateUser } from "@/lib/api-client-react/src/generated/api";
-
+import { useToast } from "@/hooks/use-toast";
 
 const ElementalName = {
   [Elemental.TITAN]: "TITAN",
@@ -18,6 +18,7 @@ const ElementalName = {
 };
 
 export default function Profile({ id }: { id: number }) {
+  const { toast } = useToast();
   const updateUser = useUpdateUser();
   const [username, setUsername] = useState("");
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -40,8 +41,17 @@ export default function Profile({ id }: { id: number }) {
       });
 
       setIsEditOpen(false);
-    } catch (error) {
-      console.error(error);
+
+      toast({
+        title: "Perfil atualizado",
+        description: "Username alterado com sucesso.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao atualizar perfil",
+        description: "Algo correu mal.",
+        variant: "destructive",
+      });
     }
   };
 
