@@ -53,12 +53,13 @@ export default function Profile({ id }: { id: number }) {
         queryKey: ["/api/users", user.id, "stats"],
       });
 
-      setIsEditOpen(false);
-
       toast({
         title: "Perfil atualizado",
         description: "Username alterado com sucesso.",
       });
+
+      setIsEditOpen(false);
+      resetAvatarState();
     } catch (error: any) {
       toast({
         title: "Erro ao atualizar perfil",
@@ -80,6 +81,15 @@ export default function Profile({ id }: { id: number }) {
       if (old) URL.revokeObjectURL(old);
       return preview;
     });
+  };
+
+  const resetAvatarState = () => {
+    setAvatarFile(null);
+
+    if (avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+      setAvatarPreview(null);
+    }
   };
 
   if (loadingUser || loadingStats) {
@@ -195,7 +205,8 @@ export default function Profile({ id }: { id: number }) {
               onChange={(e) => setUsername(e.target.value)}/>
 
             <div className="flex justify-end gap-2">
-              <button onClick={() => setIsEditOpen(false)}>
+              <button onClick={() => {
+                resetAvatarState(); setIsEditOpen(false); }}>
                 Cancelar
               </button>
 
