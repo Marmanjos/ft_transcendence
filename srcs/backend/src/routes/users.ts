@@ -3,6 +3,7 @@ import { db, usersTable, matchesTable, roundsTable } from "@workspace/db";
 import { eq, or, sql, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { GetUserParams, UpdateUserParams, UpdateUserBody } from "@workspace/api-zod";
+import { upload } from "../lib/upload.js";
 
 const router: IRouter = Router();
 
@@ -70,6 +71,16 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
     createdAt: user.createdAt.toISOString(),
   });
 });
+
+router.post("/users/:id/avatar", upload.single("avatar"), async (req, res): Promise<void> => {
+    console.log(req.file);
+
+    res.json({
+      success: true,
+      file: req.file?.filename,
+    });
+  }
+);
 
 router.get("/users/:id/stats", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
