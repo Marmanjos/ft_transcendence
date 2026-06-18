@@ -72,28 +72,21 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
-router.post("/users/:id/avatar", requireAuth, upload.single("avatar"), async (req, res): Promise<void> => {
-    const userId = parseInt(req.params.id, 10);
+router.post("/users/me/avatar", requireAuth, upload.single("avatar"), async (req, res): Promise<void> => {
+    const userId = req.user!.userId;
 
     if (!req.file) {
       res.status(400).json({ error: "Nenhum ficheiro enviado" });
       return;
     }
 
-    // caminho público do ficheiro
     const avatarUrl = `/uploads/${req.file.filename}`;
 
-    // atualiza user na base de dados
     const [user] = await db
       .update(usersTable)
       .set({ avatarUrl })
       .where(eq(usersTable.id, userId))
       .returning();
-
-    if (!user) {
-      res.status(404).json({ error: "Usuário não encontrado" });
-      return;
-    }
 
     res.json({
       id: user.id,
