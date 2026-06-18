@@ -190,11 +190,11 @@ export default function Profile({ id }: { id: number }) {
               </div>
 
               <div className="flex items-center justify-center w-full">
-                <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box">
+                <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase">
                   <button onClick={() => document.getElementById("avatar-upload")?.click()}>
                     {avatarPreview ? (
-                      <img src={avatarPreview} className="w-full h-full rounded-full object-cover"/>
-                    ) : (<Upload className="w-20 h-20" />)}
+                      <img src={avatarPreview} className="w-32 h-32 rounded-full object-cover"/>
+                    ) : (<Upload className="w-26 h-26" />)}
                   </button>
 
                   <input type="file" accept="image/*" className="hidden" id="avatar-upload" onChange={onFileChange}/>
