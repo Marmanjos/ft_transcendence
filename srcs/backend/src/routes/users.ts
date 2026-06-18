@@ -72,12 +72,35 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
-router.post("/users/:id/avatar", upload.single("avatar"), async (req, res): Promise<void> => {
-    console.log(req.file);
+router.post("/users/:id/avatar", requireAuth, upload.single("avatar"), async (req, res): Promise<void> => {
+    const userId = parseInt(req.params.id, 10);
+
+    if (!req.file) {
+      res.status(400).json({ error: "Nenhum ficheiro enviado" });
+      return;
+    }
+
+    // caminho público do ficheiro
+    const avatarUrl = `/uploads/${req.file.filename}`;
+
+    // atualiza user na base de dados
+    const [user] = await db
+      .update(usersTable)
+      .set({ avatarUrl })
+      .where(eq(usersTable.id, userId))
+      .returning();
+
+    if (!user) {
+      res.status(404).json({ error: "Usuário não encontrado" });
+      return;
+    }
 
     res.json({
-      success: true,
-      file: req.file?.filename,
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      createdAt: user.createdAt.toISOString(),
     });
   }
 );
