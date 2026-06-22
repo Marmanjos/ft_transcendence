@@ -157,8 +157,9 @@ export default function Profile({ id }: { id: number }) {
 
         </div>
       </div>
-
-      <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border pb-2 mt-12">Estatísticas de Combate</h2>
+      <div className="flex items-center justify-center w-full">
+        <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border pb-2 mt-12">Estatísticas de Combate</h2>
+      </div>
       
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-card/50 border-primary/30 text-center py-6">
