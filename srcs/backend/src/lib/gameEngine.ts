@@ -16,6 +16,45 @@ export function resolveRound(player1Choice: Elemental, player2Choice: Elemental)
 
 const elementals: Elemental[] = ["TITAN", "RAZOR", "WRAITH"];
 
-export function getAiChoice(): Elemental {
-  return elementals[Math.floor(Math.random() * elementals.length)];
+// ✅ NOVA VERSÃO - Com suporte a histórico
+export function getAiChoice(playerHistory?: Elemental[]): Elemental {
+  const elementals: Elemental[] = ["TITAN", "RAZOR", "WRAITH"];
+  
+  // Se não há histórico, escolhe aleatório (primeira jogada)
+  if (!playerHistory || playerHistory.length === 0) {
+    return elementals[Math.floor(Math.random() * elementals.length)];
+  }
+
+  // Conta as escolhas do jogador
+  const counts = { TITAN: 0, RAZOR: 0, WRAITH: 0 };
+  playerHistory.forEach(choice => counts[choice]++);
+
+  // Encontra o elemento mais escolhido pelo jogador
+  let mostFrequent = elementals[0];
+  let maxCount = 0;
+  for (const el of elementals) {
+    if (counts[el] > maxCount) {
+      maxCount = counts[el];
+      mostFrequent = el;
+    }
+  }
+
+  // Regras: o que vence cada elemento
+  const beats: Record<Elemental, Elemental> = {
+    TITAN: "RAZOR",   // TITAN (pedra) perde para RAZOR (tesoura)
+    RAZOR: "WRAITH",  // RAZOR (tesoura) perde para WRAITH (papel)
+    WRAITH: "TITAN"   // WRAITH (papel) perde para TITAN (pedra)
+  };
+
+  console.log("🎯 Histórico recebido pela IA:", playerHistory);
+
+  // 70% das vezes: escolhe o elemento que vence o mais frequente do jogador
+  // 30% das vezes: escolhe aleatório (para ser imprevisível)
+  if (Math.random() < 0.7) {
+    console.log("🤖 IA escolheu vencer o elemento mais frequente do jogador:", mostFrequent);
+    return beats[mostFrequent];
+  } else {
+    console.log("🤖 IA escolheu aleatoriamente:");
+    return elementals[Math.floor(Math.random() * elementals.length)];
+  }
 }
