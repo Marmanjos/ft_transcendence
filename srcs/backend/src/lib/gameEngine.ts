@@ -49,10 +49,8 @@ export function getAiChoice(playerHistory?: Elemental[]): Elemental {
   // 70% das vezes: escolhe o elemento que vence o mais frequente do jogador
   // 30% das vezes: escolhe aleatório (para ser imprevisível)
   if (Math.random() < 0.7) {
-    console.log("🤖 IA escolheu vencer o elemento mais frequente do jogador:", mostFrequent);
     return losesTo[mostFrequent];
   } else {
-    console.log("🤖 IA escolheu aleatoriamente:");
     return elementals[Math.floor(Math.random() * elementals.length)];
   }
 }

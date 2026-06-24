@@ -194,8 +194,6 @@ if (match.mode === "SINGLE_PLAYER") {
   
   // IA escolhe com base no histórico
   player2Choice = getAiChoice(playerHistory);
-  console.log("🤖 IA escolheu:", player2Choice);
-  console.log("📊 Histórico do jogador:", playerHistory);
 } else {
   player2Choice = player1Choice; // Multijogador (não usado aqui)
 }
