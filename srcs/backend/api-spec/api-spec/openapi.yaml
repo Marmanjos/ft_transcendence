@@ -525,7 +525,7 @@ components:
 
     Match:
       type: object
-      required: [id, player1Id, mode, status, player1Score, player2Score, createdAt]
+      required: [id, player1Id, mode, status, player1Score, player2Score, aiDifficulty, createdAt]
       properties:
         id:
           type: integer
@@ -547,6 +547,9 @@ components:
           type: integer
         player2Score:
           type: integer
+        aiDifficulty:
+          type: string
+          enum: [EASY, MEDIUM, HARD]
         createdAt:
           type: string
           format: date-time
@@ -559,6 +562,9 @@ components:
       properties:
         mode:
           $ref: "#/components/schemas/MatchMode"
+        aiDifficulty:
+          type: string
+          enum: [EASY, MEDIUM, HARD]
 
     Round:
       type: object
