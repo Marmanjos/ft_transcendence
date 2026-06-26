@@ -111,7 +111,10 @@ export default function Game() {
     setPaused(false);
     try {
       const newMatch = await createMatch.mutateAsync({
-        data: { mode: MatchMode.SINGLE_PLAYER },
+        data: { 
+          mode: MatchMode.SINGLE_PLAYER,
+          aiDifficulty: match.aiDifficulty 
+        },
       });
       setLocation(`/game?matchId=${newMatch.id}`);
       window.location.reload();
@@ -203,7 +206,7 @@ export default function Game() {
         {/* AI */}
         <div className="flex flex-col items-end gap-1 min-w-[140px]">
           <p className="font-mono text-destructive uppercase tracking-widest text-xs">
-            IA
+            IA ({match.aiDifficulty === "EASY" ? "Fácil" : match.aiDifficulty === "HARD" ? "Difícil" : "Médio"})
           </p>
           <div className="flex gap-2 justify-end">
             {[0, 1].map((i) => (
