@@ -7,6 +7,7 @@ export const organizationsTable = pgTable("organizations", {
   description: text("description"),
   ownerId: integer("owner_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   isPrivate: boolean("is_private").notNull().default(false),
+  inviteOnly: boolean("invite_only").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

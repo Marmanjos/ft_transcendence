@@ -119,6 +119,7 @@ router.get("/organizations", requireAuth, async (req, res): Promise<void> => {
         description: item.organization.description ?? null,
         ownerId: item.organization.ownerId,
         isPrivate: item.organization.isPrivate,
+        inviteOnly: item.organization.inviteOnly,
         role,
         permissions: getPermissions(role),
         memberCount: counts.get(item.organization.id) ?? 0,
@@ -165,6 +166,7 @@ router.get("/organizations/public", requireAuth, async (req, res): Promise<void>
       description: org.description ?? null,
       ownerId: org.ownerId,
       isPrivate: org.isPrivate,
+      inviteOnly: org.inviteOnly,
       memberCount: counts.get(org.id) ?? 0,
       createdAt: org.createdAt.toISOString(),
       updatedAt: org.updatedAt.toISOString(),
@@ -213,6 +215,7 @@ router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const description = typeof req.body?.description === "string" ? req.body.description.trim() : null;
   const isPrivate = !!req.body?.isPrivate;
+  const inviteOnly = !!req.body?.inviteOnly;
 
   // Name validation
   if (name.length < 3 || name.length > 80) {
@@ -222,6 +225,12 @@ router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
   const nameRegex = /^[a-zA-Z0-9À-ÿ\s\-_]+$/;
   if (!nameRegex.test(name)) {
     res.status(400).json({ error: "Nome inválido. Use apenas letras, números, espaços, hífen ou sublinhado." });
+    return;
+  }
+
+  // Description validation limit (max 200 chars)
+  if (description && description.length > 200) {
+    res.status(400).json({ error: "Descrição deve ter no máximo 200 caracteres" });
     return;
   }
 
@@ -243,7 +252,7 @@ router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
   const organization = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(organizationsTable)
-      .values({ name, description: description || null, ownerId: userId, isPrivate })
+      .values({ name, description: description || null, ownerId: userId, isPrivate, inviteOnly })
       .returning();
 
     await tx.insert(organizationMembersTable).values({
@@ -262,6 +271,7 @@ router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
     description: organization.description ?? null,
     ownerId: organization.ownerId,
     isPrivate: organization.isPrivate,
+    inviteOnly: organization.inviteOnly,
     role: "OWNER",
     permissions: getPermissions("OWNER"),
     memberCount: 1,
@@ -378,6 +388,11 @@ router.post("/organizations/:id/join", requireAuth, async (req, res): Promise<vo
 
   if (organization.isPrivate) {
     res.status(403).json({ error: "Este grupo é privado" });
+    return;
+  }
+
+  if (organization.inviteOnly) {
+    res.status(403).json({ error: "Este grupo é apenas para convidados" });
     return;
   }
 
@@ -502,6 +517,7 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
     description: organization.description ?? null,
     ownerId: organization.ownerId,
     isPrivate: organization.isPrivate,
+    inviteOnly: organization.inviteOnly,
     role,
     permissions: getPermissions(role),
     memberCount: members.filter(m => m.status === "ACCEPTED").length,
@@ -547,6 +563,7 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : undefined;
   const description = typeof req.body?.description === "string" ? req.body.description.trim() : undefined;
   const isPrivate = typeof req.body?.isPrivate === "boolean" ? req.body.isPrivate : undefined;
+  const inviteOnly = typeof req.body?.inviteOnly === "boolean" ? req.body.inviteOnly : undefined;
 
   if (name !== undefined) {
     if (name.length < 3 || name.length > 80) {
@@ -560,12 +577,18 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
     }
   }
 
+  if (description !== undefined && description !== null && description.length > 200) {
+    res.status(400).json({ error: "Descrição deve ter no máximo 200 caracteres" });
+    return;
+  }
+
   const [organization] = await db
     .update(organizationsTable)
     .set({
       ...(name !== undefined ? { name } : {}),
       ...(description !== undefined ? { description: description || null } : {}),
       ...(isPrivate !== undefined ? { isPrivate } : {}),
+      ...(inviteOnly !== undefined ? { inviteOnly } : {}),
     })
     .where(eq(organizationsTable.id, organizationId))
     .returning();
@@ -576,6 +599,7 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
     description: organization.description ?? null,
     ownerId: organization.ownerId,
     isPrivate: organization.isPrivate,
+    inviteOnly: organization.inviteOnly,
     role,
     permissions: getPermissions(role),
     createdAt: organization.createdAt.toISOString(),
@@ -704,7 +728,54 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
   });
 });
 
-// 12. Remove member
+// 12. Promote/Demote member (OWNER only)
+router.patch("/organizations/:id/members/:userId", requireAuth, async (req, res): Promise<void> => {
+  const organizationId = Number(req.params.id);
+  const targetUserId = Number(req.params.userId);
+  const currentUserId = req.user!.userId;
+  if (!Number.isInteger(organizationId) || !Number.isInteger(targetUserId)) {
+    res.status(400).json({ error: "ID inválido" });
+    return;
+  }
+
+  const membership = await requireMembership(organizationId, currentUserId, res);
+  if (!membership) return;
+  if (membership.role !== "OWNER") {
+    res.status(403).json({ error: "Apenas o dono do grupo pode alterar cargos" });
+    return;
+  }
+
+  const role = req.body?.role;
+  if (role !== "ADMIN" && role !== "MEMBER") {
+    res.status(400).json({ error: "Cargo inválido. Escolha ADMIN ou MEMBER" });
+    return;
+  }
+
+  const targetMembership = await getMembership(organizationId, targetUserId);
+  if (!targetMembership) {
+    res.status(404).json({ error: "Membro não encontrado" });
+    return;
+  }
+
+  if (targetMembership.role === "OWNER") {
+    res.status(400).json({ error: "O dono do grupo não pode ser alterado" });
+    return;
+  }
+
+  await db
+    .update(organizationMembersTable)
+    .set({ role })
+    .where(
+      and(
+        eq(organizationMembersTable.organizationId, organizationId),
+        eq(organizationMembersTable.userId, targetUserId)
+      )
+    );
+
+  res.json({ success: true });
+});
+
+// 13. Remove member
 router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const targetUserId = Number(req.params.userId);
@@ -748,7 +819,7 @@ router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res
   res.status(204).send();
 });
 
-// 13. Post message
+// 14. Post message (Max 500 characters)
 router.post("/organizations/:id/messages", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
@@ -761,8 +832,8 @@ router.post("/organizations/:id/messages", requireAuth, async (req, res): Promis
   if (!membership) return;
 
   const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
-  if (!text || text.length > 1000) {
-    res.status(400).json({ error: "Mensagem deve ter entre 1 e 1000 caracteres" });
+  if (!text || text.length > 500) {
+    res.status(400).json({ error: "Mensagem deve ter entre 1 e 500 caracteres" });
     return;
   }
 
