@@ -23,6 +23,7 @@ import Leaderboard from "@/pages/leaderboard";
 import Profile from "@/pages/profile";
 import Friends from "@/pages/friends";
 import Groups from "@/pages/groups";
+import GroupDetail from "@/pages/group-detail";
 import MatchDetail from "@/pages/match-detail";
 import NotFound from "@/pages/not-found";
 
@@ -53,6 +54,9 @@ function Router() {
         </Route>
         <Route path="/groups">
           <ProtectedRoute><Groups /></ProtectedRoute>
+        </Route>
+        <Route path="/groups/:id">
+          {params => <ProtectedRoute><GroupDetail id={Number(params.id)} /></ProtectedRoute>}
         </Route>
         <Route path="/history">
           <ProtectedRoute><History /></ProtectedRoute>
