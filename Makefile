@@ -1,5 +1,6 @@
 DOCKER = docker
 COMPOSE = $(DOCKER) compose -f srcs/docker-compose.yml
+PROJECT_URL = http://localhost
 
 all:
 	$(COMPOSE) up -d --build
