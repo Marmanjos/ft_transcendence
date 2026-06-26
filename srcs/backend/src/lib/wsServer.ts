@@ -24,6 +24,7 @@ type ServerMsg =
   | { type: "ROOM_CLOSED"; code: string; reason: "host_left" | "closed" }
   | { type: "ROOM_FULL"; code: string }
   | { type: "ROOM_NOT_FOUND"; code: string }
+  | { type: "GAME_INVITE_RECEIVED"; fromUsername: string; roomCode: string }
   | { type: "ERROR"; message: string }
   | { type: "PONG" };
 
@@ -36,6 +37,7 @@ type ClientMsg =
   | { type: "JOIN_ROOM"; code: string }
   | { type: "LEAVE_ROOM" }
   | { type: "SEND_ROOM_CHAT"; text: string }
+  | { type: "INVITE_TO_PLAY"; targetUserId: number }
   | { type: "PING" };
 
 interface ConnectedPlayer {
@@ -77,9 +79,125 @@ const playerPartyRoom = new Map<number, string>();
 // rematchOffers: matchId → set of userIds that offered rematch
 const rematchOffers = new Map<number, { player1: ConnectedPlayer; player2: ConnectedPlayer; offered: Set<number> }>();
 
+// Tracking active sockets and grace period disconnect timeouts
+const userSockets = new Map<number, Set<WebSocket>>();
+const disconnectTimeouts = new Map<number, NodeJS.Timeout>();
+
 function send(ws: WebSocket, msg: ServerMsg) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
+  }
+}
+
+function sendToUser(userId: number, msg: ServerMsg) {
+  const sockets = userSockets.get(userId);
+  if (!sockets) return;
+  const payload = JSON.stringify(msg);
+  for (const ws of sockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(payload);
+    }
+  }
+}
+
+function broadcastToUsers(userIds: number[], msg: ServerMsg) {
+  if (userIds.length === 0) return;
+  const payload = JSON.stringify(msg);
+  for (const userId of userIds) {
+    const sockets = userSockets.get(userId);
+    if (sockets) {
+      for (const ws of sockets) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(payload);
+        }
+      }
+    }
+  }
+}
+
+function updatePlayerSocket(userId: number, newWs: WebSocket) {
+  if (waitingPlayer && waitingPlayer.userId === userId) {
+    waitingPlayer.ws = newWs;
+  }
+
+  for (const room of rooms.values()) {
+    if (room.player1.userId === userId) {
+      room.player1.ws = newWs;
+    } else if (room.player2.userId === userId) {
+      room.player2.ws = newWs;
+    }
+  }
+
+  for (const room of partyRooms.values()) {
+    if (room.host.userId === userId) {
+      room.host.ws = newWs;
+    } else if (room.guest && room.guest.userId === userId) {
+      room.guest.ws = newWs;
+    }
+  }
+}
+
+function restoreClientState(userId: number, username: string) {
+  // 1. Check if they are in an active matchmaking game
+  const foundMatch = getRoomForPlayer(userId);
+  if (foundMatch) {
+    const { room, side } = foundMatch;
+    const opponent = side === "player1" ? room.player2 : room.player1;
+    sendToUser(userId, {
+      type: "MATCH_FOUND",
+      matchId: room.matchId,
+      opponentUsername: opponent.username,
+      yourSide: side,
+    });
+    if (room.choices[side]) {
+      sendToUser(userId, { type: "WAITING_FOR_OPPONENT" });
+    }
+    logger.info({ userId, matchId: room.matchId }, "Restored matchmaking game state for reconnected user");
+    return;
+  }
+
+  // 2. Check if they are in a party room
+  const partyRoom = getPartyRoomByUserId(userId);
+  if (partyRoom) {
+    const state = serializePartyRoom(partyRoom);
+    if (partyRoom.host.userId === userId) {
+      sendToUser(userId, { type: "ROOM_CREATED", ...state });
+    } else {
+      sendToUser(userId, { type: "ROOM_JOINED", ...state });
+    }
+
+    if (partyRoom.messages.length > 0) {
+      for (const message of partyRoom.messages.slice(-20)) {
+        sendToUser(userId, { type: "ROOM_CHAT", code: partyRoom.code, ...message });
+      }
+    }
+
+    if (partyRoom.matchId !== null) {
+      const matchRoom = rooms.get(partyRoom.matchId);
+      if (matchRoom) {
+        const side = matchRoom.player1.userId === userId ? "player1" : "player2";
+        const opponent = side === "player1" ? matchRoom.player2 : matchRoom.player1;
+        sendToUser(userId, {
+          type: "MATCH_FOUND",
+          matchId: partyRoom.matchId,
+          opponentUsername: opponent.username,
+          yourSide: side,
+        });
+
+        if (matchRoom.choices[side]) {
+          sendToUser(userId, { type: "WAITING_FOR_OPPONENT" });
+        }
+      }
+    }
+    logger.info({ userId, roomCode: partyRoom.code }, "Restored party room state for reconnected user");
+    return;
+  }
+
+  // 3. Check if they were waiting in queue
+  if (waitingPlayer && waitingPlayer.userId === userId) {
+    sendToUser(userId, { type: "QUEUE_JOINED" });
+    logger.info({ userId }, "Restored queue state for reconnected user");
+    return;
   }
 }
 
@@ -115,14 +233,15 @@ function getPartyRoomByUserId(userId: number): PartyRoom | null {
 
 function broadcastPartyRoomState(room: PartyRoom) {
   const state = serializePartyRoom(room);
-  send(room.host.ws, { type: "ROOM_UPDATED", ...state });
-  if (room.guest) send(room.guest.ws, { type: "ROOM_UPDATED", ...state });
+  const userIds = [room.host.userId];
+  if (room.guest) userIds.push(room.guest.userId);
+  broadcastToUsers(userIds, { type: "ROOM_UPDATED", ...state });
 }
 
 function broadcastPartyRoomChat(room: PartyRoom, message: PartyRoomMessage) {
-  const payload = { type: "ROOM_CHAT" as const, code: room.code, ...message };
-  send(room.host.ws, payload);
-  if (room.guest) send(room.guest.ws, payload);
+  const userIds = [room.host.userId];
+  if (room.guest) userIds.push(room.guest.userId);
+  broadcastToUsers(userIds, { type: "ROOM_CHAT" as const, code: room.code, ...message });
 }
 
 async function createMultiPlayerMatch(player1: ConnectedPlayer, player2: ConnectedPlayer) {
@@ -153,8 +272,8 @@ async function createMultiPlayerMatch(player1: ConnectedPlayer, player2: Connect
 }
 
 function sendMatchFound(player1: ConnectedPlayer, player2: ConnectedPlayer, matchId: number) {
-  send(player1.ws, { type: "MATCH_FOUND", matchId, opponentUsername: player2.username, yourSide: "player1" });
-  send(player2.ws, { type: "MATCH_FOUND", matchId, opponentUsername: player1.username, yourSide: "player2" });
+  sendToUser(player1.userId, { type: "MATCH_FOUND", matchId, opponentUsername: player2.username, yourSide: "player1" });
+  sendToUser(player2.userId, { type: "MATCH_FOUND", matchId, opponentUsername: player1.username, yourSide: "player2" });
 }
 
 function detachPlayerFromPartyRoom(userId: number, reason: "host_left" | "closed" = "closed") {
@@ -165,7 +284,7 @@ function detachPlayerFromPartyRoom(userId: number, reason: "host_left" | "closed
 
   if (room.host.userId === userId) {
     if (room.guest) {
-      send(room.guest.ws, { type: "ROOM_CLOSED", code: room.code, reason });
+      sendToUser(room.guest.userId, { type: "ROOM_CLOSED", code: room.code, reason });
       playerPartyRoom.delete(room.guest.userId);
     }
     partyRooms.delete(room.code);
@@ -175,13 +294,13 @@ function detachPlayerFromPartyRoom(userId: number, reason: "host_left" | "closed
 
   room.guest = null;
   playerPartyRoom.delete(userId);
-  send(room.host.ws, { type: "ROOM_PLAYER_LEFT", code: room.code, username: departingUsername });
+  sendToUser(room.host.userId, { type: "ROOM_PLAYER_LEFT", code: room.code, username: departingUsername });
   broadcastPartyRoomState(room);
 }
 
 async function handleCreateRoom(player: ConnectedPlayer) {
   if (getPartyRoomByUserId(player.userId)) {
-    send(player.ws, { type: "ERROR", message: "Você já está em uma sala." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você já está em uma sala." });
     return;
   }
 
@@ -197,13 +316,43 @@ async function handleCreateRoom(player: ConnectedPlayer) {
   partyRooms.set(code, room);
   playerPartyRoom.set(player.userId, code);
 
-  send(player.ws, { type: "ROOM_CREATED", ...serializePartyRoom(room) });
+  sendToUser(player.userId, { type: "ROOM_CREATED", ...serializePartyRoom(room) });
+}
+
+async function handleInviteToPlay(player: ConnectedPlayer, targetUserId: number) {
+  const targetSockets = userSockets.get(targetUserId);
+  if (!targetSockets || targetSockets.size === 0) {
+    sendToUser(player.userId, { type: "ERROR", message: "Este amigo está offline no momento." });
+    return;
+  }
+
+  let room = getPartyRoomByUserId(player.userId);
+
+  if (!room) {
+    const code = generateRoomCode();
+    room = {
+      code,
+      host: player,
+      guest: null,
+      matchId: null,
+      messages: [],
+    };
+    partyRooms.set(code, room);
+    playerPartyRoom.set(player.userId, code);
+    sendToUser(player.userId, { type: "ROOM_CREATED", ...serializePartyRoom(room) });
+  }
+
+  sendToUser(targetUserId, {
+    type: "GAME_INVITE_RECEIVED",
+    fromUsername: player.username,
+    roomCode: room.code,
+  });
 }
 
 async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
   const code = codeRaw.trim().toUpperCase();
   if (!code) {
-    send(player.ws, { type: "ERROR", message: "Informe o código da sala." });
+    sendToUser(player.userId, { type: "ERROR", message: "Informe o código da sala." });
     return;
   }
 
@@ -214,17 +363,17 @@ async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
 
   const room = partyRooms.get(code);
   if (!room) {
-    send(player.ws, { type: "ROOM_NOT_FOUND", code });
+    sendToUser(player.userId, { type: "ROOM_NOT_FOUND", code });
     return;
   }
 
   if (room.guest && room.guest.userId !== player.userId) {
-    send(player.ws, { type: "ROOM_FULL", code });
+    sendToUser(player.userId, { type: "ROOM_FULL", code });
     return;
   }
 
   if (room.host.userId === player.userId) {
-    send(player.ws, { type: "ROOM_JOINED", ...serializePartyRoom(room) });
+    sendToUser(player.userId, { type: "ROOM_JOINED", ...serializePartyRoom(room) });
     return;
   }
 
@@ -237,8 +386,8 @@ async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
       logger.info({ roomCode: room.code, matchId: room.matchId, host: room.host.userId, guest: room.guest.userId }, "Room match created");
     } catch (err) {
       logger.error({ err }, "Failed to create room match");
-      send(room.host.ws, { type: "ERROR", message: "Falha ao iniciar a partida da sala." });
-      send(player.ws, { type: "ERROR", message: "Falha ao iniciar a partida da sala." });
+      sendToUser(room.host.userId, { type: "ERROR", message: "Falha ao iniciar a partida da sala." });
+      sendToUser(player.userId, { type: "ERROR", message: "Falha ao iniciar a partida da sala." });
       room.guest = null;
       playerPartyRoom.delete(player.userId);
       return;
@@ -246,8 +395,8 @@ async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
   }
 
   const state = serializePartyRoom(room);
-  send(room.host.ws, { type: "ROOM_UPDATED", ...state });
-  send(player.ws, { type: "ROOM_JOINED", ...state });
+  sendToUser(room.host.ws, { type: "ROOM_UPDATED", ...state });
+  sendToUser(player.userId, { type: "ROOM_JOINED", ...state });
 
   if (room.matchId !== null) {
     sendMatchFound(room.host, room.guest, room.matchId);
@@ -255,7 +404,7 @@ async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
 
   if (room.messages.length > 0) {
     for (const message of room.messages.slice(-20)) {
-      send(player.ws, { type: "ROOM_CHAT", code: room.code, ...message });
+      sendToUser(player.userId, { type: "ROOM_CHAT", code: room.code, ...message });
     }
   }
 }
@@ -267,12 +416,12 @@ function handleLeaveRoom(player: ConnectedPlayer) {
 function handleRoomChat(player: ConnectedPlayer, text: string) {
   const room = getPartyRoomByUserId(player.userId);
   if (!room) {
-    send(player.ws, { type: "ERROR", message: "Você não está em uma sala." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você não está em uma sala." });
     return;
   }
 
   if (!room.guest) {
-    send(player.ws, { type: "ERROR", message: "A sala precisa de dois jogadores para o chat." });
+    sendToUser(player.userId, { type: "ERROR", message: "A sala precisa de dois jogadores para o chat." });
     return;
   }
 
@@ -304,14 +453,30 @@ function getRoomForPlayer(userId: number): { room: Room; side: "player1" | "play
 }
 
 async function handleJoinQueue(player: ConnectedPlayer) {
+  const foundMatch = getRoomForPlayer(player.userId);
+  if (foundMatch) {
+    const { room, side } = foundMatch;
+    const opponent = side === "player1" ? room.player2 : room.player1;
+    sendToUser(player.userId, {
+      type: "MATCH_FOUND",
+      matchId: room.matchId,
+      opponentUsername: opponent.username,
+      yourSide: side,
+    });
+    if (room.choices[side]) {
+      sendToUser(player.userId, { type: "WAITING_FOR_OPPONENT" });
+    }
+    return;
+  }
+
   if (waitingPlayer && waitingPlayer.userId === player.userId) {
-    send(player.ws, { type: "ERROR", message: "Você já está na fila." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você já está na fila." });
     return;
   }
 
   if (!waitingPlayer) {
     waitingPlayer = player;
-    send(player.ws, { type: "QUEUE_JOINED" });
+    sendToUser(player.userId, { type: "QUEUE_JOINED" });
     logger.info({ userId: player.userId }, "Player joined queue");
     return;
   }
@@ -345,12 +510,12 @@ async function handleJoinQueue(player: ConnectedPlayer) {
 
     logger.info({ matchId: match.id, p1: opponent.userId, p2: player.userId }, "Multiplayer match created");
 
-    send(opponent.ws, { type: "MATCH_FOUND", matchId: match.id, opponentUsername: player.username, yourSide: "player1" });
-    send(player.ws, { type: "MATCH_FOUND", matchId: match.id, opponentUsername: opponent.username, yourSide: "player2" });
+    sendToUser(opponent.userId, { type: "MATCH_FOUND", matchId: match.id, opponentUsername: player.username, yourSide: "player1" });
+    sendToUser(player.userId, { type: "MATCH_FOUND", matchId: match.id, opponentUsername: opponent.username, yourSide: "player2" });
   } catch (err) {
     logger.error({ err }, "Failed to create multiplayer match");
-    send(player.ws, { type: "ERROR", message: "Falha ao criar partida." });
-    send(opponent.ws, { type: "ERROR", message: "Falha ao criar partida." });
+    sendToUser(player.userId, { type: "ERROR", message: "Falha ao criar partida." });
+    sendToUser(opponent.userId, { type: "ERROR", message: "Falha ao criar partida." });
     waitingPlayer = null;
   }
 }
@@ -358,19 +523,19 @@ async function handleJoinQueue(player: ConnectedPlayer) {
 async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elemental: Elemental) {
   const room = rooms.get(matchId);
   if (!room) {
-    send(player.ws, { type: "ERROR", message: "Partida não encontrada." });
+    sendToUser(player.userId, { type: "ERROR", message: "Partida não encontrada." });
     return;
   }
 
   const side = room.player1.userId === player.userId ? "player1" : "player2";
 
   if (room.choices[side]) {
-    send(player.ws, { type: "ERROR", message: "Você já enviou sua escolha." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você já enviou sua escolha." });
     return;
   }
 
   room.choices[side] = elemental;
-  send(player.ws, { type: "WAITING_FOR_OPPONENT" });
+  sendToUser(player.userId, { type: "WAITING_FOR_OPPONENT" });
 
   if (!room.choices.player1 || !room.choices.player2) return;
 
@@ -421,7 +586,7 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
     const p1Outcome = outcome === "WIN" ? "WIN" : outcome === "LOSS" ? "LOSS" : "DRAW";
     const p2Outcome = outcome === "WIN" ? "LOSS" : outcome === "LOSS" ? "WIN" : "DRAW";
 
-    send(room.player1.ws, {
+    sendToUser(room.player1.userId, {
       type: "ROUND_RESULT",
       roundNumber,
       player1Choice: p1Choice,
@@ -430,7 +595,7 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
       player1Score: room.player1Score,
       player2Score: room.player2Score,
     });
-    send(room.player2.ws, {
+    sendToUser(room.player2.userId, {
       type: "ROUND_RESULT",
       roundNumber,
       player1Choice: p1Choice,
@@ -445,8 +610,8 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
       const p2 = room.player2;
       const finishedMatchId = room.matchId;
       setTimeout(() => {
-        send(p1.ws, { type: "MATCH_OVER", winnerId, player1Score: room.player1Score, player2Score: room.player2Score });
-        send(p2.ws, { type: "MATCH_OVER", winnerId, player1Score: room.player1Score, player2Score: room.player2Score });
+        const userIds = [p1.userId, p2.userId];
+        broadcastToUsers(userIds, { type: "MATCH_OVER", winnerId, player1Score: room.player1Score, player2Score: room.player2Score });
         // Register rematch slot so both players can offer a rematch
         rematchOffers.set(finishedMatchId, { player1: p1, player2: p2, offered: new Set() });
         // Clean up after 3 minutes if no rematch accepted
@@ -459,21 +624,21 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
     }
   } catch (err) {
     logger.error({ err }, "Error resolving round");
-    send(player.ws, { type: "ERROR", message: "Erro ao processar rodada." });
+    sendToUser(player.userId, { type: "ERROR", message: "Erro ao processar rodada." });
   }
 }
 
 async function handleOfferRematch(player: ConnectedPlayer, matchId: number) {
   const slot = rematchOffers.get(matchId);
   if (!slot) {
-    send(player.ws, { type: "ERROR", message: "Revanche não disponível." });
+    sendToUser(player.userId, { type: "ERROR", message: "Revanche não disponível." });
     return;
   }
 
   const isPlayer1 = slot.player1.userId === player.userId;
   const isPlayer2 = slot.player2.userId === player.userId;
   if (!isPlayer1 && !isPlayer2) {
-    send(player.ws, { type: "ERROR", message: "Você não fez parte desta partida." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você não fez parte desta partida." });
     return;
   }
 
@@ -482,8 +647,8 @@ async function handleOfferRematch(player: ConnectedPlayer, matchId: number) {
 
   if (slot.offered.size === 1) {
     // First offer — notify self to wait, tell opponent they were offered
-    send(player.ws, { type: "REMATCH_WAITING" });
-    send(opponent.ws, { type: "REMATCH_OFFERED" });
+    sendToUser(player.userId, { type: "REMATCH_WAITING" });
+    sendToUser(opponent.userId, { type: "REMATCH_OFFERED" });
     return;
   }
 
@@ -515,12 +680,12 @@ async function handleOfferRematch(player: ConnectedPlayer, matchId: number) {
 
     logger.info({ matchId: newMatch.id }, "Rematch match created");
 
-    send(slot.player1.ws, { type: "MATCH_FOUND", matchId: newMatch.id, opponentUsername: slot.player2.username, yourSide: "player1" });
-    send(slot.player2.ws, { type: "MATCH_FOUND", matchId: newMatch.id, opponentUsername: slot.player1.username, yourSide: "player2" });
+    sendToUser(slot.player1.userId, { type: "MATCH_FOUND", matchId: newMatch.id, opponentUsername: slot.player2.username, yourSide: "player1" });
+    sendToUser(slot.player2.userId, { type: "MATCH_FOUND", matchId: newMatch.id, opponentUsername: slot.player1.username, yourSide: "player2" });
   } catch (err) {
     logger.error({ err }, "Failed to create rematch");
-    send(slot.player1.ws, { type: "ERROR", message: "Falha ao criar revanche." });
-    send(slot.player2.ws, { type: "ERROR", message: "Falha ao criar revanche." });
+    sendToUser(slot.player1.userId, { type: "ERROR", message: "Falha ao criar revanche." });
+    sendToUser(slot.player2.userId, { type: "ERROR", message: "Falha ao criar revanche." });
   }
 }
 
@@ -591,7 +756,7 @@ export function attachWsServer(server: Server) {
       try {
         msg = JSON.parse(rawData) as ClientMsg;
       } catch {
-        send(ws, { type: "ERROR", message: "Mensagem inválida." });
+        sendToUser(player.userId, { type: "ERROR", message: "Mensagem inválida." });
         return;
       }
 
@@ -620,8 +785,11 @@ export function attachWsServer(server: Server) {
         case "SEND_ROOM_CHAT":
           handleRoomChat(player, msg.text);
           break;
+        case "INVITE_TO_PLAY":
+          await handleInviteToPlay(player, msg.targetUserId);
+          break;
         case "PING":
-          send(ws, { type: "PONG" });
+          sendToUser(player.userId, { type: "PONG" });
           break;
       }
     };
@@ -645,6 +813,28 @@ export function attachWsServer(server: Server) {
       player = { ws, userId: user.id, username: user.username };
       logger.info({ userId: user.id }, "WS client connected");
 
+      // Register socket in connection manager
+      let sockets = userSockets.get(user.id);
+      if (!sockets) {
+        sockets = new Set();
+        userSockets.set(user.id, sockets);
+      }
+      sockets.add(ws);
+
+      // Cancel disconnection grace period if active
+      const timeout = disconnectTimeouts.get(user.id);
+      if (timeout) {
+        clearTimeout(timeout);
+        disconnectTimeouts.delete(user.id);
+        logger.info({ userId: user.id }, "Player reconnected within grace period; timeout cancelled");
+      }
+
+      // Update socket references in active games/rooms
+      updatePlayerSocket(user.id, ws);
+
+      // Restore UI state for the client
+      restoreClientState(user.id, user.username);
+
       for (const rawData of pendingMessages.splice(0)) {
         void handleClientMessage(rawData);
       }
@@ -655,8 +845,26 @@ export function attachWsServer(server: Server) {
 
     ws.on("close", () => {
       if (player) {
-        handleDisconnect(player.userId);
-        detachPlayerFromPartyRoom(player.userId, "host_left");
+        const userId = player.userId;
+        const sockets = userSockets.get(userId);
+        if (sockets) {
+          sockets.delete(ws);
+          if (sockets.size === 0) {
+            userSockets.delete(userId);
+
+            // Start grace period timeout (8 seconds)
+            logger.info({ userId }, "All client sockets disconnected; starting grace period timeout");
+            const timeout = setTimeout(() => {
+              disconnectTimeouts.delete(userId);
+              handleDisconnect(userId);
+              detachPlayerFromPartyRoom(userId, "host_left");
+              logger.info({ userId }, "Player disconnected permanently after grace period");
+            }, 8000);
+            disconnectTimeouts.set(userId, timeout);
+          } else {
+            logger.info({ userId, remainingSockets: sockets.size }, "Client closed one socket, other sockets still active");
+          }
+        }
         logger.info({ userId: player.userId }, "WS client disconnected");
       }
     });
