@@ -8,6 +8,8 @@ services:
       - ./backend/.env
     ports:
       - "3001:3001"
+    volumes:
+      - backend_data:/app/uploads
     networks:
       - ft_transcendence
 
@@ -22,6 +24,14 @@ services:
       - ft_transcendence
     depends_on:
       - back-end
+
+volumes:
+  backend_data:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: ${HOME}/data/backend
 
 networks:
   ft_transcendence:
