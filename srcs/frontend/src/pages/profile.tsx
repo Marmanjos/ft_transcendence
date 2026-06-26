@@ -1,9 +1,19 @@
 import { useAuth } from "@/hooks/use-auth"; //acabei de adicionar issso
-import { useGetUser, useGetUserStats, useListMatches } from "@workspace/api-client-react";
+import { 
+  useGetUser, 
+  useGetUserStats, 
+  useListMatches, 
+  useListFriends, 
+  useAddFriend, 
+  useAcceptFriend, 
+  useRemoveFriend 
+} from "@workspace/api-client-react";
 import { Elemental } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Link } from "wouter";
-import { User as UserIcon, Activity, Crosshair, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Link, useLocation } from "wouter";
+import { User as UserIcon, Activity, Crosshair, Target, UserPlus, UserMinus, Swords } from "lucide-react";
+import { useWs } from "@/hooks/use-ws";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Edit, Upload } from "lucide-react";
@@ -28,10 +38,58 @@ export default function Profile({ id }: { id: number }) {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
-  const { user: authUser } = useAuth(); //acabei de adicionar
+  const { user: authUser, token } = useAuth();
+  const { send } = useWs(token);
+  const [, setLocation] = useLocation();
   const { data: user, isLoading: loadingUser } = useGetUser(id, { query: { queryKey: ["/api/users", id], enabled: !!id } });
   const { data: stats, isLoading: loadingStats } = useGetUserStats(id, { query: { queryKey: ["/api/users", id, "stats"], enabled: !!id } });
   const isOwnProfile = authUser?.id === user?.id;
+
+  const { data: friendships } = useListFriends({ query: { queryKey: ["/api/friends"], enabled: !isOwnProfile && !!authUser } });
+  const addFriendMutation = useAddFriend();
+  const acceptFriendMutation = useAcceptFriend();
+  const removeFriendMutation = useRemoveFriend();
+
+  const friendship = friendships?.find(f => f.friend.id === id);
+
+  const handleAddFriend = async () => {
+    try {
+      await addFriendMutation.mutateAsync({ data: { friendId: id } });
+      toast({ title: "Solicitação enviada", description: "Convite de amizade enviado!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.response?.data?.error || "Não foi possível enviar solicitação.", variant: "destructive" });
+    }
+  };
+
+  const handleAcceptFriend = async (fid: number) => {
+    try {
+      await acceptFriendMutation.mutateAsync({ id: fid });
+      toast({ title: "Amizade aceita", description: "Agora vocês são amigos!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+    } catch (err) {
+      toast({ title: "Erro", description: "Não foi possível aceitar a solicitação.", variant: "destructive" });
+    }
+  };
+
+  const handleRemoveFriend = async (fid: number, isRequest = false) => {
+    try {
+      await removeFriendMutation.mutateAsync({ id: fid });
+      toast({ title: isRequest ? "Solicitação removida" : "Amigo removido", description: isRequest ? "A solicitação foi cancelada/rejeitada." : "Usuário removido da lista de amigos." });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+    } catch (err) {
+      toast({ title: "Erro", description: "Não foi possível concluir a ação.", variant: "destructive" });
+    }
+  };
+
+  const handleInviteToPlay = () => {
+    send({ type: "INVITE_TO_PLAY", targetUserId: id });
+    toast({
+      title: "Desafio Iniciado",
+      description: "Convite de jogo enviado! Redirecionando para a sala...",
+    });
+    setLocation("/room");
+  };
   // Note: we fetch global matches and filter client side for now, or just show recent since ListMatches doesn't take a userId param in the provided schema.
   // Actually ListMatches says "Get match history for current user", so if this profile is not the current user, we can't see their matches via listMatches.
   // We'll skip matches if it's not the current user, but the schema doesn't provide a way to check. Let's just show the stats.
@@ -154,6 +212,41 @@ export default function Profile({ id }: { id: number }) {
           <p className="text-muted-foreground font-mono mt-2 uppercase text-sm">
             Recrutado em: {format(new Date(user.createdAt), "dd 'de' MMMM, yyyy", { locale: ptBR })}
           </p>
+
+          {!isOwnProfile && authUser && (
+            <div className="mt-4 flex gap-2 justify-center md:justify-start">
+              {!friendship && (
+                <Button onClick={handleAddFriend} className="h-10 px-6 font-bold uppercase tracking-widest neon-box text-xs">
+                  <UserPlus className="w-4 h-4 mr-2" /> Adicionar Amigo
+                </Button>
+              )}
+              {friendship && friendship.status === "PENDING" && (
+                <Button onClick={() => handleRemoveFriend(friendship.id, true)} variant="outline" className="h-10 px-6 font-bold uppercase tracking-widest text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive">
+                  Solicitação Enviada
+                </Button>
+              )}
+              {friendship && friendship.status === "REQUEST_RECEIVED" && (
+                <div className="flex gap-2">
+                  <Button onClick={() => handleAcceptFriend(friendship.id)} className="h-10 px-6 font-bold uppercase tracking-widest neon-box text-xs">
+                    Aceitar Convite
+                  </Button>
+                  <Button onClick={() => handleRemoveFriend(friendship.id, true)} variant="outline" className="h-10 px-4 font-bold uppercase tracking-widest text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive">
+                    Recusar
+                  </Button>
+                </div>
+              )}
+              {friendship && friendship.status === "ACCEPTED" && (
+                <div className="flex gap-2">
+                  <Button onClick={handleInviteToPlay} className="h-10 px-6 font-bold uppercase tracking-widest neon-box text-xs">
+                    <Swords className="w-4 h-4 mr-2" /> Convidar para Jogar
+                  </Button>
+                  <Button onClick={() => handleRemoveFriend(friendship.id)} variant="outline" className="h-10 px-6 font-bold uppercase tracking-widest text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive">
+                    <UserMinus className="w-4 h-4 mr-2" /> Remover Amigo
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       </div>
