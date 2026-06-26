@@ -66,6 +66,8 @@ export default function RoomPage() {
   const [scores, setScores] = useState({ player1Score: 0, player2Score: 0 });
   const [errorMsg, setErrorMsg] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [opponentOffline, setOpponentOffline] = useState(false);
+  const [offlineCountdown, setOfflineCountdown] = useState(8);
 
   const isArena = Boolean(matchInfo);
   const canChat = Boolean(roomState?.canChat);
@@ -148,8 +150,16 @@ export default function RoomPage() {
         case "REMATCH_WAITING":
           setArenaState("REMATCH_WAITING");
           break;
+        case "OPPONENT_TEMPORARILY_DISCONNECTED":
+          setOpponentOffline(true);
+          setOfflineCountdown(8);
+          break;
+        case "OPPONENT_RECONNECTED":
+          setOpponentOffline(false);
+          break;
         case "OPPONENT_DISCONNECTED":
           setArenaState("OPPONENT_DISCONNECTED");
+          setOpponentOffline(false);
           break;
         case "ROOM_CHAT":
           setMessages((current) => {
@@ -201,6 +211,15 @@ export default function RoomPage() {
       off();
     };
   }, [isArena, matchInfo?.yourSide, onMessage, toast, user?.username]);
+
+  useEffect(() => {
+    if (!opponentOffline) return undefined;
+    if (offlineCountdown <= 0) return undefined;
+    const interval = setInterval(() => {
+      setOfflineCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [opponentOffline, offlineCountdown]);
 
   const sortedMessages = useMemo(() => messages, [messages]);
 
@@ -449,6 +468,33 @@ export default function RoomPage() {
                 <h2 className="text-4xl font-black uppercase tracking-widest text-primary neon-text">Oponente saiu</h2>
                 <p className="font-mono text-white/50 uppercase text-sm">O teu adversário abandonou a sala.</p>
                 <Button onClick={() => setLocation("/lobby")} size="lg" className="h-12 px-10 font-bold uppercase tracking-widest neon-box">Voltar ao Lobby</Button>
+              </div>
+            </motion.div>
+          )}
+
+          {isArena && opponentOffline && arenaState !== "OPPONENT_DISCONNECTED" && (
+            <motion.div key="opp_offline_room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
+              <div className="flex flex-col items-center text-center gap-6 p-10 border border-destructive/30 rounded-2xl bg-card/80 max-w-md mx-4 animate-pulse">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 border-4 border-destructive/20 rounded-full" />
+                  <div className="absolute inset-0 border-4 border-destructive border-t-transparent rounded-full animate-spin" />
+                </div>
+                <h2 className="text-3xl font-black uppercase tracking-widest text-destructive neon-text">Oponente Offline</h2>
+                <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                  O adversário perdeu a ligação.<br />Aguardando retorno em <span className="text-destructive font-black text-xl">{offlineCountdown}s</span>...
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {isArena && !connected && (
+            <motion.div key="self_offline_room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.9)", backdropFilter: "blur(12px)" }}>
+              <div className="flex flex-col items-center text-center gap-6 p-10 border border-primary/40 rounded-2xl bg-card/80 max-w-md mx-4">
+                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                <h2 className="text-3xl font-black uppercase tracking-widest text-primary neon-text">Perda de Ligação</h2>
+                <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                  Perdeste a ligação ao servidor.<br />A tentar restabelecer conexão...
+                </p>
               </div>
             </motion.div>
           )}
