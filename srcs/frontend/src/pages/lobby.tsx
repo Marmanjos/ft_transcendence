@@ -1,4 +1,5 @@
 import { useLocation, Link } from "wouter";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGetArenaSummary, useListMatches, useGetLeaderboard, useCreateMatch } from "@workspace/api-client-react";
@@ -9,6 +10,7 @@ import { Users, Swords, Activity, Trophy, Bot, Globe, History } from "lucide-rea
 export default function Lobby() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [difficulty, setDifficulty] = useState<"EASY" | "MEDIUM" | "HARD">("MEDIUM");
   
   const { data: summary } = useGetArenaSummary();
   const { data: matches } = useListMatches({ limit: 5 });
@@ -18,7 +20,12 @@ export default function Lobby() {
 
   const handlePlayAI = async () => {
     try {
-      const match = await createMatch.mutateAsync({ data: { mode: MatchMode.SINGLE_PLAYER } });
+      const match = await createMatch.mutateAsync({ 
+        data: { 
+          mode: MatchMode.SINGLE_PLAYER,
+          aiDifficulty: difficulty 
+        } 
+      });
       setLocation(`/game?matchId=${match.id}`);
     } catch (error) {
       toast({
@@ -36,7 +43,32 @@ export default function Lobby() {
           <h1 className="text-4xl font-black uppercase tracking-widest text-primary neon-text">Terminal da Arena</h1>
           <p className="text-muted-foreground font-mono mt-1">Conectado à rede global de duelos.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center justify-between gap-2 bg-card/50 border border-primary/20 p-2 rounded-xl backdrop-blur h-14 px-4">
+            <span className="text-xs font-mono font-bold uppercase tracking-widest text-primary/80 mr-2 hidden sm:inline">IA:</span>
+            <div className="flex gap-1">
+              {(["EASY", "MEDIUM", "HARD"] as const).map((diff) => (
+                <Button
+                  key={diff}
+                  size="sm"
+                  variant={difficulty === diff ? "default" : "ghost"}
+                  onClick={() => setDifficulty(diff)}
+                  className={`h-8 font-bold text-[10px] uppercase tracking-wider px-2.5 transition-all ${
+                    difficulty === diff
+                      ? diff === "EASY"
+                        ? "bg-emerald-500 hover:bg-emerald-600 text-black font-black neon-box"
+                        : diff === "MEDIUM"
+                        ? "bg-amber-500 hover:bg-amber-600 text-black font-black neon-box"
+                        : "bg-destructive hover:bg-destructive/80 text-white font-black neon-box"
+                      : "text-muted-foreground hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {diff === "EASY" ? "Fácil" : diff === "MEDIUM" ? "Médio" : "Difícil"}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <Button
             size="lg"
             onClick={handlePlayAI}
