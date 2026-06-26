@@ -35,6 +35,7 @@ export default function Game() {
     aiChoice: Elemental;
     outcome: RoundOutcome;
   } | null>(null);
+  const [aiMessage, setAiMessage] = useState<string>("Sistemas da IA ativados...");
 
   useEffect(() => {
     if (!matchId) setLocation("/lobby");
@@ -220,6 +221,24 @@ export default function Game() {
           </div>
         </div>
       </div>
+
+      {/* ── BALÃO DE FALA DA IA ── */}
+      {aiMessage && (
+        <motion.div
+          key={aiMessage}
+          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -10, scale: 0.95 }}
+          transition={{ duration: 0.3 }}
+          className="absolute top-20 right-6 z-30 max-w-[280px] bg-black/80 border border-destructive/50 rounded-2xl p-4 shadow-[0_0_20px_rgba(255,0,0,0.15)] font-mono text-xs text-destructive relative backdrop-blur-sm"
+        >
+          <div className="absolute -top-2 right-6 w-4 h-4 bg-black/90 border-t border-l border-destructive/50 transform rotate-45" />
+          <div className="flex gap-2">
+            <span className="text-destructive font-black">🤖 IA:</span>
+            <p className="text-white font-mono leading-relaxed">{aiMessage}</p>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── CENTER OVERLAYS ── */}
       <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
