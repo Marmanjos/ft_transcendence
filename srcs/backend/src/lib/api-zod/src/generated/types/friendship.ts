@@ -5,9 +5,12 @@
  * Elemental Duel API — futuristic multiplayer arena game
  * OpenAPI spec version: 0.1.0
  */
+import type { FriendshipStatus } from './friendshipStatus';
 import type { User } from './user';
 
-export interface AuthResponse {
-  user: User;
-  token: string;
+export interface Friendship {
+  id: number;
+  friend: User;
+  status: FriendshipStatus;
+  createdAt: Date;
 }

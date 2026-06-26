@@ -5,8 +5,8 @@
  * Elemental Duel API — futuristic multiplayer arena game
  * OpenAPI spec version: 0.1.0
  */
-import type { MatchMode } from './matchMode';
 
-export interface MatchInput {
-  mode: MatchMode;
-}
+export type AddFriendBody = {
+  friendId?: number;
+  username?: string;
+};
