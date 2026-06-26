@@ -1,4 +1,4 @@
-DOCKER = sudo docker
+DOCKER = docker
 COMPOSE = $(DOCKER) compose -f srcs/docker-compose.yml
 
 all:
