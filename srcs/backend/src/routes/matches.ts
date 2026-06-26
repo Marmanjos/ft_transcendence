@@ -25,6 +25,7 @@ function formatMatch(match: typeof matchesTable.$inferSelect, p1Username?: strin
     winnerId: match.winnerId ?? null,
     player1Score: match.player1Score,
     player2Score: match.player2Score,
+    aiDifficulty: match.aiDifficulty,
     createdAt: match.createdAt.toISOString(),
     completedAt: match.completedAt ? match.completedAt.toISOString() : null,
   };
@@ -80,6 +81,7 @@ router.post("/matches", requireAuth, async (req, res): Promise<void> => {
     .values({
       player1Id: req.user!.userId,
       mode: parsed.data.mode,
+      aiDifficulty: parsed.data.aiDifficulty ?? "MEDIUM",
       status: "ACTIVE",
       player1Score: 0,
       player2Score: 0,
@@ -178,7 +180,10 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
   }
 
   const player1Choice = parsed.data.elemental as Elemental;
-  const player2Choice = match.mode === "SINGLE_PLAYER" ? getAiChoice() : player1Choice;
+  const previousPlayerChoices = existingRounds.map(r => r.player1Choice as Elemental);
+  const player2Choice = match.mode === "SINGLE_PLAYER" 
+    ? getAiChoice(match.aiDifficulty, previousPlayerChoices) 
+    : player1Choice;
   const outcome = resolveRound(player1Choice, player2Choice);
 
   const [round] = await db
