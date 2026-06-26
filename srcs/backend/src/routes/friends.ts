@@ -3,6 +3,7 @@ import { db, usersTable, friendshipsTable } from "@workspace/db";
 import { eq, or, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { AddFriendBody, AcceptFriendParams, RemoveFriendParams } from "@workspace/api-zod";
+import { sendToUser } from "../lib/wsServer.js";
 
 const router: IRouter = Router();
 
@@ -77,6 +78,17 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
   const { friendId, username } = parsed.data;
 
   try {
+    const [currentUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, currentUserId))
+      .limit(1);
+
+    if (!currentUser) {
+      res.status(404).json({ error: "Usuário atual não encontrado" });
+      return;
+    }
+
     let targetUser;
 
     if (friendId !== undefined) {
@@ -91,13 +103,8 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
         .limit(1);
     } else if (username !== undefined) {
       const cleanUsername = username.trim();
-      const [currentUser] = await db
-        .select()
-        .from(usersTable)
-        .where(eq(usersTable.id, currentUserId))
-        .limit(1);
-      
-      if (currentUser && currentUser.username.toLowerCase() === cleanUsername.toLowerCase()) {
+
+      if (currentUser.username.toLowerCase() === cleanUsername.toLowerCase()) {
         res.status(400).json({ error: "Você não pode adicionar a si mesmo" });
         return;
       }
@@ -146,6 +153,12 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
         .where(eq(friendshipsTable.id, existing.id))
         .returning();
 
+      sendToUser(targetUserId, {
+        type: "FRIEND_UPDATE",
+        reason: "REQUEST_ACCEPTED",
+        fromUsername: currentUser.username,
+      });
+
       res.status(201).json({
         id: updated.id,
         friend: {
@@ -169,6 +182,12 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
         status: "PENDING",
       })
       .returning();
+
+    sendToUser(targetUserId, {
+      type: "FRIEND_UPDATE",
+      reason: "REQUEST_RECEIVED",
+      fromUsername: currentUser.username,
+    });
 
     res.status(201).json({
       id: newFriendship.id,
@@ -229,6 +248,18 @@ router.post("/friends/:id/accept", requireAuth, async (req, res): Promise<void> 
       .where(eq(usersTable.id, friendId))
       .limit(1);
 
+    const [currentUser] = await db
+      .select({ username: usersTable.username })
+      .from(usersTable)
+      .where(eq(usersTable.id, currentUserId))
+      .limit(1);
+
+    sendToUser(friendId, {
+      type: "FRIEND_UPDATE",
+      reason: "REQUEST_ACCEPTED",
+      fromUsername: currentUser?.username,
+    });
+
     res.json({
       id: updated.id,
       friend: friend ? {
@@ -278,6 +309,12 @@ router.delete("/friends/:id", requireAuth, async (req, res): Promise<void> => {
     await db
       .delete(friendshipsTable)
       .where(eq(friendshipsTable.id, id));
+
+    const targetUserId = friendship.userId === currentUserId ? friendship.friendId : friendship.userId;
+    sendToUser(targetUserId, {
+      type: "FRIEND_UPDATE",
+      reason: "REMOVED",
+    });
 
     res.status(204).end();
   } catch (err) {
