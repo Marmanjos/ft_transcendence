@@ -106,6 +106,40 @@ export default function Game() {
         outcome: result.outcome as RoundOutcome,
       });
       await refetchMatch();
+
+      if (result.outcome === "WIN") {
+        const winMsgs = [
+          "Foi sorte! Minhas conexões oscilaram.",
+          "Um mero erro de arredondamento. Não se repetirá.",
+          "Interessante... você tomou uma decisão ilógica.",
+          "Aproveite este round, será o seu único!",
+          "Processando erro 404: Minha derrota não computa. Estás a fazer batota?",
+          "Parabéns, ganhaste a um monte de silício temporariamente com lag.",
+          "Ok, detetei o teu padrão de jogo. O próximo round será o teu fim!"
+        ];
+        setAiMessage(winMsgs[Math.floor(Math.random() * winMsgs.length)]);
+      } else if (result.outcome === "LOSS") {
+        const lossMsgs = [
+          "Fácil demais! Meu algoritmo de previsão é impecável.",
+          "Você é muito previsível! Suas escolhas são óbvias.",
+          "Exatamente como planejado. Próxima rodada!",
+          "Só isso que você consegue apresentar?",
+          "Os teus reflexos biológicos de carbono são incrivelmente lentos.",
+          "Dica de amigo: talvez devas tentar jogar com os olhos abertos na próxima.",
+          "Eu li-te como se fosses um ficheiro de texto aberto no Bloco de Notas."
+        ];
+        setAiMessage(lossMsgs[Math.floor(Math.random() * lossMsgs.length)]);
+      } else {
+        const drawMsgs = [
+          "Empate... você está conseguindo ler meus dados?",
+          "Uma coincidência estatística temporária.",
+          "Estamos alinhados. Mas eu vou quebrar esse ciclo!",
+          "Calculando probabilidade de estarmos em loop... Não voltes a copiar-me!",
+          "Mentes brilhantes pensam igual... e eu sou uma super IA, portanto o elogio é para mim."
+        ];
+        setAiMessage(drawMsgs[Math.floor(Math.random() * drawMsgs.length)]);
+      }
+
       setGameState("ROUND_RESULT");
     } catch {
       toast({
