@@ -329,6 +329,89 @@ paths:
               schema:
                 $ref: "#/components/schemas/ArenaSummary"
 
+  /friends:
+    get:
+      operationId: listFriends
+      tags: [users]
+      summary: Get list of friends and pending requests
+      responses:
+        "200":
+          description: Friends list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Friendship"
+    post:
+      operationId: addFriend
+      tags: [users]
+      summary: Send a friend request or add a friend
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                friendId:
+                  type: integer
+                username:
+                  type: string
+      responses:
+        "201":
+          description: Friend request sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Friendship"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /friends/{id}/accept:
+    post:
+      operationId: acceptFriend
+      tags: [users]
+      summary: Accept a friend request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Friend request accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Friendship"
+        "404":
+          description: Friendship not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /friends/{id}:
+    delete:
+      operationId: removeFriend
+      tags: [users]
+      summary: Remove a friend or decline/cancel a request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Friendship removed
+
 components:
   schemas:
     HealthStatus:
@@ -357,7 +440,6 @@ components:
           maxLength: 20
         email:
           type: string
-          format: email
         password:
           type: string
           minLength: 6
@@ -572,3 +654,18 @@ components:
           type: integer
         activeMatches:
           type: integer
+
+    Friendship:
+      type: object
+      required: [id, friend, status, createdAt]
+      properties:
+        id:
+          type: integer
+        friend:
+          $ref: "#/components/schemas/User"
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REQUEST_RECEIVED]
+        createdAt:
+          type: string
+          format: date-time
