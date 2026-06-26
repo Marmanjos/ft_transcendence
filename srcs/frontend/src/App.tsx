@@ -21,6 +21,7 @@ import GameMulti from "@/pages/game-multi";
 import History from "@/pages/history";
 import Leaderboard from "@/pages/leaderboard";
 import Profile from "@/pages/profile";
+import Friends from "@/pages/friends";
 import MatchDetail from "@/pages/match-detail";
 import NotFound from "@/pages/not-found";
 
@@ -45,6 +46,9 @@ function Router() {
         </Route>
         <Route path="/room">
           <ProtectedRoute><Room /></ProtectedRoute>
+        </Route>
+        <Route path="/friends">
+          <ProtectedRoute><Friends /></ProtectedRoute>
         </Route>
         <Route path="/history">
           <ProtectedRoute><History /></ProtectedRoute>
