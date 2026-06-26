@@ -1,15 +1,84 @@
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Plus, Search, Shield, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 
-const USER_GROUPS = [
-  { id: 1, name: "Arena Core", role: "Admin", members: 8 },
-  { id: 2, name: "Night Duelists", role: "Member", members: 14 },
-  { id: 3, name: "Training Squad", role: "Editor", members: 5 },
-];
+interface OrganizationSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  memberCount: number;
+}
+
+function apiUrl(path: string) {
+  const base = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, "") ?? "";
+  return `${base}/api${path}`;
+}
 
 export default function Groups() {
+  const { token } = useAuth();
+  const { toast } = useToast();
+  const [groups, setGroups] = useState<OrganizationSummary[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const loadGroups = async (searchText = search) => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const query = searchText.trim() ? `?search=${encodeURIComponent(searchText.trim())}` : "";
+      const response = await fetch(apiUrl(`/organizations${query}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Falha ao carregar grupos");
+      setGroups(await response.json());
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os grupos.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadGroups("");
+  }, [token]);
+
+  const handleCreateGroup = async () => {
+    if (!token) return;
+    const name = window.prompt("Nome do grupo");
+    if (!name?.trim()) return;
+    const description = window.prompt("Descrição do grupo (opcional)") ?? "";
+
+    try {
+      const response = await fetch(apiUrl("/organizations"), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: name.trim(), description: description.trim() || null }),
+      });
+      if (!response.ok) throw new Error("Falha ao criar grupo");
+      const created = await response.json() as OrganizationSummary;
+      setGroups((current) => [created, ...current]);
+      toast({ title: "Grupo criado", description: created.name });
+    } catch {
+      toast({
+        title: "Erro",
+        description: "Não foi possível criar o grupo.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -22,7 +91,7 @@ export default function Groups() {
           </p>
         </div>
 
-        <Button className="h-11 px-5 font-bold uppercase tracking-widest">
+        <Button onClick={handleCreateGroup} className="h-11 px-5 font-bold uppercase tracking-widest">
           <Plus className="w-4 h-4" />
           Criar Grupo
         </Button>
@@ -30,10 +99,16 @@ export default function Groups() {
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
           placeholder="Pesquisar grupos..."
           className="h-11 border-primary/20 bg-muted/30 font-mono"
         />
-        <Button variant="outline" className="h-11 px-5 font-mono uppercase tracking-widest">
+        <Button
+          variant="outline"
+          onClick={() => void loadGroups(search)}
+          className="h-11 px-5 font-mono uppercase tracking-widest"
+        >
           <Search className="w-4 h-4" />
           Pesquisar
         </Button>
@@ -47,8 +122,17 @@ export default function Groups() {
           </h2>
         </div>
 
-        <div className="grid gap-3">
-          {USER_GROUPS.map((group) => (
+        {loading ? (
+          <p className="text-center text-muted-foreground font-mono py-8">
+            Carregando grupos...
+          </p>
+        ) : groups.length === 0 ? (
+          <p className="text-center text-muted-foreground font-mono py-8 border border-dashed border-border rounded-lg">
+            Nenhum grupo encontrado.
+          </p>
+        ) : (
+          <div className="grid gap-3">
+          {groups.map((group) => (
             <Link key={group.id} href={`/groups/${group.id}`}>
               <button className="w-full rounded-lg border border-border bg-muted/30 p-4 text-left transition-colors hover:border-primary/60 hover:bg-muted/50">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -57,7 +141,7 @@ export default function Groups() {
                       {group.name}
                     </p>
                     <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                      {group.members} membros
+                      {group.memberCount} membros
                     </p>
                   </div>
 
@@ -69,7 +153,8 @@ export default function Groups() {
               </button>
             </Link>
           ))}
-        </div>
+          </div>
+        )}
       </section>
     </div>
   );

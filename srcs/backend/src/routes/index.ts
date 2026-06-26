@@ -5,6 +5,7 @@ import usersRouter from "./users.js";
 import matchesRouter from "./matches.js";
 import leaderboardRouter from "./leaderboard.js";
 import friendsRouter from "./friends.js";
+import organizationsRouter from "./organizations.js";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(usersRouter);
 router.use(matchesRouter);
 router.use(leaderboardRouter);
 router.use(friendsRouter);
+router.use(organizationsRouter);
 
 export default router;
