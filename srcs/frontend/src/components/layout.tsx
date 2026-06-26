@@ -33,6 +33,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Button>
           ),
         });
+      } else if (msg.type === "FRIEND_UPDATE") {
+        if (msg.reason === "REQUEST_RECEIVED") {
+          toast({
+            title: "Solicitação de Amizade! 🤝",
+            description: `${msg.fromUsername || "Alguém"} enviou-te um pedido de amizade.`,
+            action: (
+              <Button
+                size="sm"
+                onClick={() => setLocation("/friends")}
+                className="bg-primary hover:bg-primary/80 font-bold uppercase tracking-wider text-xs h-8 px-3 text-white"
+              >
+                Ver Pedidos
+              </Button>
+            ),
+          });
+        } else if (msg.reason === "REQUEST_ACCEPTED") {
+          toast({
+            title: "Pedido Aceito! 🎉",
+            description: `Agora você e ${msg.fromUsername || "um jogador"} são amigos.`,
+          });
+        }
       }
     });
 

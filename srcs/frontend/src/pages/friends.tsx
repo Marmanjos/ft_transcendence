@@ -11,14 +11,28 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { useWs, type ServerMsg } from "@/hooks/use-ws";
+import { useEffect } from "react";
 
 export default function Friends() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { token } = useAuth();
+  const { onMessage } = useWs(token);
 
   const [activeTab, setActiveTab] = useState<"active" | "received" | "sent">("active");
   const [usernameInput, setUsernameInput] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const off = onMessage((msg: ServerMsg) => {
+      if (msg.type === "FRIEND_UPDATE") {
+        queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+      }
+    });
+    return off;
+  }, [onMessage, queryClient]);
 
   // Queries & Mutations
   const { data: friendships, isLoading } = useListFriends({

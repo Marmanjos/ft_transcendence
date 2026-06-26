@@ -18,6 +18,7 @@ export type ServerMsg =
   | { type: "ROOM_FULL"; code: string }
   | { type: "ROOM_NOT_FOUND"; code: string }
   | { type: "GAME_INVITE_RECEIVED"; fromUsername: string; roomCode: string }
+  | { type: "FRIEND_UPDATE"; reason: "REQUEST_RECEIVED" | "REQUEST_ACCEPTED" | "REMOVED"; fromUsername?: string }
   | { type: "OPPONENT_TEMPORARILY_DISCONNECTED" }
   | { type: "OPPONENT_RECONNECTED" }
   | { type: "ERROR"; message: string }
