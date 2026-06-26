@@ -25,6 +25,14 @@ services:
     depends_on:
       - back-end
 
+  data-base:
+    build: ./data-base
+    image: database
+    container_name: database
+    restart: unless-stopped
+    networks:
+      - ft_transcendence
+
 volumes:
   backend_data:
       driver: local
@@ -32,6 +40,13 @@ volumes:
         type: none
         o: bind
         device: ${HOME}/data/backend
+
+  database_data:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: ${HOME}/data/database
 
 networks:
   ft_transcendence:
