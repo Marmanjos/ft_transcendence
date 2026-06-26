@@ -25,6 +25,8 @@ type ServerMsg =
   | { type: "ROOM_FULL"; code: string }
   | { type: "ROOM_NOT_FOUND"; code: string }
   | { type: "GAME_INVITE_RECEIVED"; fromUsername: string; roomCode: string }
+  | { type: "OPPONENT_TEMPORARILY_DISCONNECTED" }
+  | { type: "OPPONENT_RECONNECTED" }
   | { type: "ERROR"; message: string }
   | { type: "PONG" };
 
@@ -827,6 +829,23 @@ export function attachWsServer(server: Server) {
         clearTimeout(timeout);
         disconnectTimeouts.delete(user.id);
         logger.info({ userId: user.id }, "Player reconnected within grace period; timeout cancelled");
+
+        // Notify opponent of reconnection
+        const matchRoom = getRoomForPlayer(user.id);
+        if (matchRoom) {
+          const opponent = matchRoom.side === "player1" ? matchRoom.room.player2 : matchRoom.room.player1;
+          send(opponent.ws, { type: "OPPONENT_RECONNECTED" });
+        } else {
+          const partyRoom = getPartyRoomByUserId(user.id);
+          if (partyRoom && partyRoom.matchId !== null) {
+            const activeMatchRoom = rooms.get(partyRoom.matchId);
+            if (activeMatchRoom) {
+              const side = activeMatchRoom.player1.userId === user.id ? "player1" : "player2";
+              const opponent = side === "player1" ? activeMatchRoom.player2 : activeMatchRoom.player1;
+              send(opponent.ws, { type: "OPPONENT_RECONNECTED" });
+            }
+          }
+        }
       }
 
       // Update socket references in active games/rooms
@@ -851,6 +870,23 @@ export function attachWsServer(server: Server) {
           sockets.delete(ws);
           if (sockets.size === 0) {
             userSockets.delete(userId);
+
+            // Notify opponent of temporary disconnection
+            const matchRoom = getRoomForPlayer(userId);
+            if (matchRoom) {
+              const opponent = matchRoom.side === "player1" ? matchRoom.room.player2 : matchRoom.room.player1;
+              send(opponent.ws, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
+            } else {
+              const partyRoom = getPartyRoomByUserId(userId);
+              if (partyRoom && partyRoom.matchId !== null) {
+                const activeMatchRoom = rooms.get(partyRoom.matchId);
+                if (activeMatchRoom) {
+                  const side = activeMatchRoom.player1.userId === userId ? "player1" : "player2";
+                  const opponent = side === "player1" ? activeMatchRoom.player2 : activeMatchRoom.player1;
+                  send(opponent.ws, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
+                }
+              }
+            }
 
             // Start grace period timeout (8 seconds)
             logger.info({ userId }, "All client sockets disconnected; starting grace period timeout");
