@@ -1,11 +1,45 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, History, Trophy, User } from "lucide-react";
+import { LogOut, Home, History, Trophy, User, Users } from "lucide-react";
+import { useEffect } from "react";
+import { useWs } from "@/hooks/use-ws";
+import { useToast } from "@/hooks/use-toast";
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
-  const [location] = useLocation();
+  const { user, logout, token } = useAuth();
+  const [location, setLocation] = useLocation();
+  const { toast } = useToast();
+  const { send, onMessage } = useWs(token);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const off = onMessage((msg) => {
+      if (msg.type === "GAME_INVITE_RECEIVED") {
+        toast({
+          title: "Desafio Recebido! ⚔️",
+          description: `${msg.fromUsername} te convidou para jogar.`,
+          action: (
+            <Button
+              size="sm"
+              onClick={() => {
+                send({ type: "JOIN_ROOM", code: msg.roomCode });
+                setLocation("/room");
+              }}
+              className="bg-primary hover:bg-primary/80 font-bold uppercase tracking-wider text-xs h-8 px-3 text-white"
+            >
+              Aceitar
+            </Button>
+          ),
+        });
+      }
+    });
+
+    return () => {
+      off();
+    };
+  }, [token, onMessage, send, setLocation, toast]);
 
   const isAuthPage = location === "/login" || location === "/register" || location === "/" || location === "/game";
 
@@ -38,6 +72,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Link>
             <Link href={`/profile/${user?.id}`} className={`text-sm font-medium transition-colors hover:text-primary ${location.startsWith("/profile") ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><User className="w-4 h-4" /> Perfil</span>
+            </Link>
+            <Link href="/friends" className={`text-sm font-medium transition-colors hover:text-primary ${location === "/friends" ? "text-primary neon-text" : "text-muted-foreground"}`}>
+              <span className="flex items-center gap-2"><Users className="w-4 h-4" /> Amigos</span>
             </Link>
           </nav>
 
