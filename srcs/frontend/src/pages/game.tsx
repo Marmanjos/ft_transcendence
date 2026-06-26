@@ -47,6 +47,26 @@ export default function Game() {
     }
   }, [match]);
 
+  useEffect(() => {
+    if (gameState === "SELECTING") {
+      const selectMsgs = [
+        "Se eu fosse você, jogaria TITAN desta vez...",
+        "Estou detectando um padrão nas suas escolhas... vai de WRAITH?",
+        "Escolha logo! Minhas previsões dizem que você vai perder.",
+        "Desafio você a jogar RAZOR agora!",
+        "Analisei suas escolhas. Minhas chances de vitória são de 87.5%.",
+        "Estou a pensar em jogar TITAN. Joga WRAITH para me venceres... ou será que estou a mentir?",
+        "Não te atrevas a usar RAZOR agora! O meu contra-ataque já está pronto.",
+        "Se eu fosse a ti, escolhia WRAITH. Confia em mim, sou apenas uma IA...",
+        "Aposto os meus chips de memória que vais escolher TITAN neste round.",
+        "Estou a processar a tua derrota em 4K. Escolhe rápido, humano!",
+        "A sério que demoras tanto tempo para tomar uma decisão binária?",
+        "Os meus sensores dizem que vais hesitar. Mostra o que vales!"
+      ];
+      setAiMessage(selectMsgs[Math.floor(Math.random() * selectMsgs.length)]);
+    }
+  }, [gameState]);
+
   // Countdown ticker
   useEffect(() => {
     if (gameState !== "COUNTDOWN") return undefined;
