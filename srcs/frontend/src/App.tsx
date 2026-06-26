@@ -22,6 +22,7 @@ import History from "@/pages/history";
 import Leaderboard from "@/pages/leaderboard";
 import Profile from "@/pages/profile";
 import Friends from "@/pages/friends";
+import Groups from "@/pages/groups";
 import MatchDetail from "@/pages/match-detail";
 import NotFound from "@/pages/not-found";
 
@@ -49,6 +50,9 @@ function Router() {
         </Route>
         <Route path="/friends">
           <ProtectedRoute><Friends /></ProtectedRoute>
+        </Route>
+        <Route path="/groups">
+          <ProtectedRoute><Groups /></ProtectedRoute>
         </Route>
         <Route path="/history">
           <ProtectedRoute><History /></ProtectedRoute>
