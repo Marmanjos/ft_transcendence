@@ -17,6 +17,7 @@ export type ServerMsg =
   | { type: "ROOM_CLOSED"; code: string; reason: "host_left" | "closed" }
   | { type: "ROOM_FULL"; code: string }
   | { type: "ROOM_NOT_FOUND"; code: string }
+  | { type: "GAME_INVITE_RECEIVED"; fromUsername: string; roomCode: string }
   | { type: "ERROR"; message: string }
   | { type: "PONG" };
 
@@ -29,6 +30,7 @@ export type ClientMsg =
   | { type: "JOIN_ROOM"; code: string }
   | { type: "LEAVE_ROOM" }
   | { type: "SEND_ROOM_CHAT"; text: string }
+  | { type: "INVITE_TO_PLAY"; targetUserId: number }
   | { type: "PING" };
 
 type MsgHandler = (msg: ServerMsg) => void;
