@@ -15,6 +15,7 @@ interface OrganizationMember {
   userId: number;
   username: string;
   role: "OWNER" | "ADMIN" | "MEMBER";
+  status: "PENDING" | "ACCEPTED";
 }
 
 interface OrganizationMessage {
@@ -31,6 +32,7 @@ interface OrganizationDetail {
   description: string | null;
   role: "OWNER" | "ADMIN" | "MEMBER";
   memberCount: number;
+  isPrivate: boolean;
   permissions: {
     update: boolean;
     delete: boolean;
@@ -82,6 +84,7 @@ export default function GroupDetail({ id }: GroupDetailProps) {
     const name = window.prompt("Novo nome do grupo", group.name);
     if (!name?.trim()) return;
     const description = window.prompt("Nova descrição", group.description ?? "") ?? "";
+    const isPrivate = window.confirm(`Deseja tornar este grupo PRIVADO? (Grupos privados não aparecem nas buscas públicas)\n\nAtualmente: ${group.isPrivate ? "PRIVADO" : "PÚBLICO"}`);
 
     try {
       const response = await fetch(apiUrl(`/organizations/${id}`), {
@@ -90,15 +93,22 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() || null }),
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || null,
+          isPrivate
+        }),
       });
-      if (!response.ok) throw new Error("Falha ao atualizar grupo");
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao atualizar grupo");
+      }
       await loadGroup();
       toast({ title: "Grupo atualizado" });
-    } catch {
+    } catch (error: any) {
       toast({
         title: "Erro",
-        description: "Não foi possível atualizar o grupo.",
+        description: error.message || "Não foi possível atualizar o grupo.",
         variant: "destructive",
       });
     }
@@ -137,20 +147,28 @@ export default function GroupDetail({ id }: GroupDetailProps) {
         },
         body: JSON.stringify({ username: username.trim(), role: "MEMBER" }),
       });
-      if (!response.ok) throw new Error("Falha ao adicionar membro");
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao adicionar membro");
+      }
       await loadGroup();
-      toast({ title: "Membro adicionado", description: username.trim() });
-    } catch {
+      toast({ title: "Convite enviado", description: `Convite enviado para ${username.trim()}` });
+    } catch (error: any) {
       toast({
         title: "Erro",
-        description: "Não foi possível adicionar o membro.",
+        description: error.message || "Não foi possível convidar o membro.",
         variant: "destructive",
       });
     }
   };
 
   const handleRemoveMember = async (member: OrganizationMember) => {
-    if (!token || !window.confirm(`Remover ${member.username} do grupo?`)) return;
+    const isSelf = member.userId === user?.id;
+    const confirmMessage = isSelf
+      ? "Tem certeza de que deseja sair deste grupo?"
+      : `Remover ${member.username} do grupo?`;
+
+    if (!token || !window.confirm(confirmMessage)) return;
 
     try {
       const response = await fetch(apiUrl(`/organizations/${id}/members/${member.userId}`), {
@@ -158,12 +176,18 @@ export default function GroupDetail({ id }: GroupDetailProps) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error("Falha ao remover membro");
-      await loadGroup();
-      toast({ title: "Membro removido", description: member.username });
+      
+      if (isSelf) {
+        setLocation("/groups");
+        toast({ title: "Sucesso", description: "Você saiu do grupo." });
+      } else {
+        await loadGroup();
+        toast({ title: "Membro removido", description: member.username });
+      }
     } catch {
       toast({
         title: "Erro",
-        description: "Não foi possível remover o membro.",
+        description: isSelf ? "Não foi possível sair do grupo." : "Não foi possível remover o membro.",
         variant: "destructive",
       });
     }
@@ -206,7 +230,7 @@ export default function GroupDetail({ id }: GroupDetailProps) {
       <div className="max-w-4xl mx-auto space-y-6">
         <Link href="/groups">
           <Button variant="ghost" className="font-mono uppercase tracking-widest">
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4 mr-2" />
             Voltar
           </Button>
         </Link>
@@ -218,10 +242,10 @@ export default function GroupDetail({ id }: GroupDetailProps) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 pb-12">
       <Link href="/groups">
         <Button variant="ghost" className="font-mono uppercase tracking-widest">
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 mr-2" />
           Voltar
         </Button>
       </Link>
@@ -233,9 +257,16 @@ export default function GroupDetail({ id }: GroupDetailProps) {
               <UsersRound className="w-7 h-7" />
             </div>
             <div>
-              <h1 className="text-3xl font-black uppercase tracking-widest text-primary neon-text">
-                {group.name}
-              </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-black uppercase tracking-widest text-primary neon-text">
+                  {group.name}
+                </h1>
+                {group.isPrivate && (
+                  <span className="rounded bg-destructive/10 border border-destructive/20 px-2.5 py-0.5 text-xs font-mono uppercase tracking-wider text-destructive">
+                    Privado
+                  </span>
+                )}
+              </div>
               <p className="text-muted-foreground font-mono">
                 {group.description || "Sem descrição"}
               </p>
@@ -250,8 +281,16 @@ export default function GroupDetail({ id }: GroupDetailProps) {
             )}
             {group.permissions.delete && (
               <Button variant="destructive" onClick={handleDeleteGroup}>
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 mr-2" />
                 Apagar
+              </Button>
+            )}
+            {!group.permissions.delete && (
+              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => {
+                const selfMember = group.members.find(m => m.userId === user?.id);
+                if (selfMember) void handleRemoveMember(selfMember);
+              }}>
+                Sair do Grupo
               </Button>
             )}
           </div>
@@ -260,7 +299,7 @@ export default function GroupDetail({ id }: GroupDetailProps) {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-md border border-border bg-background/40 p-4">
             <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-              Funcao
+              Função
             </p>
             <p className="mt-1 flex items-center gap-2 font-bold text-primary">
               <Shield className="w-4 h-4" />
@@ -271,13 +310,15 @@ export default function GroupDetail({ id }: GroupDetailProps) {
             <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
               Membros
             </p>
-            <p className="mt-1 font-bold text-white">{group.memberCount}</p>
+            <p className="mt-1 font-bold text-white">{group.memberCount} / 50</p>
           </div>
           <div className="rounded-md border border-border bg-background/40 p-4">
             <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-              Permissoes
+              Visibilidade
             </p>
-            <p className="mt-1 font-bold text-white">Create, Read, Update</p>
+            <p className="mt-1 font-bold text-white">
+              {group.isPrivate ? "Privado" : "Público"}
+            </p>
           </div>
         </div>
       </div>
@@ -287,8 +328,8 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           <h2 className="text-xl font-bold uppercase tracking-widest">Membros</h2>
           {group.permissions.manageMembers && (
             <Button onClick={handleAddMember} size="sm">
-              <Plus className="w-4 h-4" />
-              Adicionar
+              <Plus className="w-4 h-4 mr-1" />
+              Convidar
             </Button>
           )}
         </div>
@@ -297,7 +338,14 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           {group.members.map((member) => (
             <div key={member.id} className="flex items-center justify-between rounded-md border border-border bg-background/40 p-3">
               <div>
-                <p className="font-bold text-white">{member.username}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-white">{member.username}</p>
+                  {member.status === "PENDING" && (
+                    <span className="rounded bg-warning/10 border border-warning/20 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-warning animate-pulse">
+                      Pendente
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
                   {member.role}
                 </p>
@@ -318,7 +366,7 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           <h2 className="text-xl font-bold uppercase tracking-widest">Mensagens</h2>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
           {group.messages.length === 0 ? (
             <p className="text-center text-muted-foreground font-mono py-6">
               Nenhuma mensagem ainda.
@@ -341,8 +389,9 @@ export default function GroupDetail({ id }: GroupDetailProps) {
             onChange={(event) => setMessage(event.target.value)}
             placeholder="Escrever mensagem..."
             className="h-11 border-primary/20 bg-background/40"
+            onKeyDown={(e) => e.key === "Enter" && void handleSendMessage()}
           />
-          <Button onClick={handleSendMessage} className="h-11">
+          <Button onClick={handleSendMessage} className="h-11 px-6 font-bold uppercase tracking-wider">
             Enviar
           </Button>
         </div>

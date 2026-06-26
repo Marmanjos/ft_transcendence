@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Response } from "express";
-import { and, desc, eq, ilike, inArray } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, notInArray } from "drizzle-orm";
 import {
   db,
   organizationMembersTable,
@@ -52,8 +52,8 @@ async function requireMembership(
   res: Response,
 ) {
   const membership = await getMembership(organizationId, userId);
-  if (!membership) {
-    res.status(404).json({ error: "Organização não encontrada" });
+  if (!membership || membership.status !== "ACCEPTED") {
+    res.status(403).json({ error: "Acesso negado. Você precisa aceitar o convite primeiro." });
     return null;
   }
   return membership;
@@ -68,7 +68,12 @@ async function getMemberCount(organizationIds: number[]) {
       id: organizationMembersTable.id,
     })
     .from(organizationMembersTable)
-    .where(inArray(organizationMembersTable.organizationId, organizationIds));
+    .where(
+      and(
+        inArray(organizationMembersTable.organizationId, organizationIds),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
 
   const counts = new Map<number, number>();
   for (const member of members) {
@@ -77,6 +82,7 @@ async function getMemberCount(organizationIds: number[]) {
   return counts;
 }
 
+// 1. Get user's accepted organizations
 router.get("/organizations", requireAuth, async (req, res): Promise<void> => {
   const userId = req.user!.userId;
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
@@ -92,9 +98,13 @@ router.get("/organizations", requireAuth, async (req, res): Promise<void> => {
       search
         ? and(
             eq(organizationMembersTable.userId, userId),
+            eq(organizationMembersTable.status, "ACCEPTED"),
             ilike(organizationsTable.name, `%${search}%`),
           )
-        : eq(organizationMembersTable.userId, userId),
+        : and(
+            eq(organizationMembersTable.userId, userId),
+            eq(organizationMembersTable.status, "ACCEPTED")
+          ),
     )
     .orderBy(desc(organizationsTable.updatedAt));
 
@@ -108,6 +118,7 @@ router.get("/organizations", requireAuth, async (req, res): Promise<void> => {
         name: item.organization.name,
         description: item.organization.description ?? null,
         ownerId: item.organization.ownerId,
+        isPrivate: item.organization.isPrivate,
         role,
         permissions: getPermissions(role),
         memberCount: counts.get(item.organization.id) ?? 0,
@@ -118,26 +129,128 @@ router.get("/organizations", requireAuth, async (req, res): Promise<void> => {
   );
 });
 
+// 2. Get public organizations that the user is not a member of (invites/active)
+router.get("/organizations/public", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.user!.userId;
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+
+  // Get user's memberships (both pending and accepted)
+  const userMemberships = await db
+    .select({ organizationId: organizationMembersTable.organizationId })
+    .from(organizationMembersTable)
+    .where(eq(organizationMembersTable.userId, userId));
+
+  const excludedOrgIds = userMemberships.map((m) => m.organizationId);
+
+  const conditions = [eq(organizationsTable.isPrivate, false)];
+  if (excludedOrgIds.length > 0) {
+    conditions.push(notInArray(organizationsTable.id, excludedOrgIds));
+  }
+  if (search) {
+    conditions.push(ilike(organizationsTable.name, `%${search}%`));
+  }
+
+  const publicOrgs = await db
+    .select()
+    .from(organizationsTable)
+    .where(and(...conditions))
+    .orderBy(desc(organizationsTable.updatedAt));
+
+  const counts = await getMemberCount(publicOrgs.map((o) => o.id));
+
+  res.json(
+    publicOrgs.map((org) => ({
+      id: org.id,
+      name: org.name,
+      description: org.description ?? null,
+      ownerId: org.ownerId,
+      isPrivate: org.isPrivate,
+      memberCount: counts.get(org.id) ?? 0,
+      createdAt: org.createdAt.toISOString(),
+      updatedAt: org.updatedAt.toISOString(),
+    })),
+  );
+});
+
+// 3. Get pending invites for the user
+router.get("/organizations/invites", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.user!.userId;
+
+  const invites = await db
+    .select({
+      id: organizationMembersTable.id,
+      role: organizationMembersTable.role,
+      createdAt: organizationMembersTable.createdAt,
+      organization: organizationsTable,
+    })
+    .from(organizationMembersTable)
+    .innerJoin(organizationsTable, eq(organizationMembersTable.organizationId, organizationsTable.id))
+    .where(
+      and(
+        eq(organizationMembersTable.userId, userId),
+        eq(organizationMembersTable.status, "PENDING")
+      )
+    )
+    .orderBy(desc(organizationMembersTable.createdAt));
+
+  res.json(
+    invites.map((item) => ({
+      id: item.id,
+      role: item.role,
+      createdAt: item.createdAt.toISOString(),
+      organization: {
+        id: item.organization.id,
+        name: item.organization.name,
+        description: item.organization.description ?? null,
+      },
+    })),
+  );
+});
+
+// 4. Create a new organization
 router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
   const userId = req.user!.userId;
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const description = typeof req.body?.description === "string" ? req.body.description.trim() : null;
+  const isPrivate = !!req.body?.isPrivate;
 
+  // Name validation
   if (name.length < 3 || name.length > 80) {
     res.status(400).json({ error: "Nome deve ter entre 3 e 80 caracteres" });
+    return;
+  }
+  const nameRegex = /^[a-zA-Z0-9À-ÿ\s\-_]+$/;
+  if (!nameRegex.test(name)) {
+    res.status(400).json({ error: "Nome inválido. Use apenas letras, números, espaços, hífen ou sublinhado." });
+    return;
+  }
+
+  // Enforce 10 organizations max per user
+  const userOrgs = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.userId, userId),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
+  if (userOrgs.length >= 10) {
+    res.status(400).json({ error: "Você atingiu o limite de 10 grupos" });
     return;
   }
 
   const organization = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(organizationsTable)
-      .values({ name, description: description || null, ownerId: userId })
+      .values({ name, description: description || null, ownerId: userId, isPrivate })
       .returning();
 
     await tx.insert(organizationMembersTable).values({
       organizationId: created.id,
       userId,
       role: "OWNER",
+      status: "ACCEPTED",
     });
 
     return created;
@@ -148,6 +261,7 @@ router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
     name: organization.name,
     description: organization.description ?? null,
     ownerId: organization.ownerId,
+    isPrivate: organization.isPrivate,
     role: "OWNER",
     permissions: getPermissions("OWNER"),
     memberCount: 1,
@@ -156,6 +270,180 @@ router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+// 5. Accept pending invite
+router.post("/organizations/:id/accept", requireAuth, async (req, res): Promise<void> => {
+  const organizationId = Number(req.params.id);
+  const userId = req.user!.userId;
+  if (!Number.isInteger(organizationId)) {
+    res.status(400).json({ error: "ID inválido" });
+    return;
+  }
+
+  const [membership] = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.organizationId, organizationId),
+        eq(organizationMembersTable.userId, userId),
+        eq(organizationMembersTable.status, "PENDING")
+      )
+    )
+    .limit(1);
+
+  if (!membership) {
+    res.status(404).json({ error: "Convite não encontrado" });
+    return;
+  }
+
+  // Enforce 10 organizations max per user
+  const userOrgs = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.userId, userId),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
+  if (userOrgs.length >= 10) {
+    res.status(400).json({ error: "Você atingiu o limite de 10 grupos" });
+    return;
+  }
+
+  // Enforce 50 users max per organization
+  const orgMembers = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.organizationId, organizationId),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
+  if (orgMembers.length >= 50) {
+    res.status(400).json({ error: "O grupo atingiu o limite de 50 membros" });
+    return;
+  }
+
+  await db
+    .update(organizationMembersTable)
+    .set({ status: "ACCEPTED" })
+    .where(eq(organizationMembersTable.id, membership.id));
+
+  res.json({ success: true });
+});
+
+// 6. Decline pending invite
+router.post("/organizations/:id/decline", requireAuth, async (req, res): Promise<void> => {
+  const organizationId = Number(req.params.id);
+  const userId = req.user!.userId;
+  if (!Number.isInteger(organizationId)) {
+    res.status(400).json({ error: "ID inválido" });
+    return;
+  }
+
+  await db
+    .delete(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.organizationId, organizationId),
+        eq(organizationMembersTable.userId, userId),
+        eq(organizationMembersTable.status, "PENDING")
+      )
+    );
+
+  res.json({ success: true });
+});
+
+// 7. Join public organization directly
+router.post("/organizations/:id/join", requireAuth, async (req, res): Promise<void> => {
+  const organizationId = Number(req.params.id);
+  const userId = req.user!.userId;
+  if (!Number.isInteger(organizationId)) {
+    res.status(400).json({ error: "ID inválido" });
+    return;
+  }
+
+  const [organization] = await db
+    .select()
+    .from(organizationsTable)
+    .where(eq(organizationsTable.id, organizationId))
+    .limit(1);
+
+  if (!organization) {
+    res.status(404).json({ error: "Grupo não encontrado" });
+    return;
+  }
+
+  if (organization.isPrivate) {
+    res.status(403).json({ error: "Este grupo é privado" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.organizationId, organizationId),
+        eq(organizationMembersTable.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    if (existing.status === "ACCEPTED") {
+      res.status(400).json({ error: "Você já está neste grupo" });
+    } else {
+      res.status(400).json({ error: "Você já tem um convite pendente para este grupo" });
+    }
+    return;
+  }
+
+  // Enforce 10 organizations max per user
+  const userOrgs = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.userId, userId),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
+  if (userOrgs.length >= 10) {
+    res.status(400).json({ error: "Você atingiu o limite de 10 grupos" });
+    return;
+  }
+
+  // Enforce 50 users max per organization
+  const orgMembers = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.organizationId, organizationId),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
+  if (orgMembers.length >= 50) {
+    res.status(400).json({ error: "O grupo atingiu o limite de 50 membros" });
+    return;
+  }
+
+  await db
+    .insert(organizationMembersTable)
+    .values({
+      organizationId,
+      userId,
+      role: "MEMBER",
+      status: "ACCEPTED",
+    });
+
+  res.json({ success: true });
+});
+
+// 8. Get organization details (requires accepted membership)
 router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
@@ -183,6 +471,7 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
       id: organizationMembersTable.id,
       userId: organizationMembersTable.userId,
       role: organizationMembersTable.role,
+      status: organizationMembersTable.status,
       createdAt: organizationMembersTable.createdAt,
       username: usersTable.username,
       email: usersTable.email,
@@ -212,9 +501,10 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
     name: organization.name,
     description: organization.description ?? null,
     ownerId: organization.ownerId,
+    isPrivate: organization.isPrivate,
     role,
     permissions: getPermissions(role),
-    memberCount: members.length,
+    memberCount: members.filter(m => m.status === "ACCEPTED").length,
     createdAt: organization.createdAt.toISOString(),
     updatedAt: organization.updatedAt.toISOString(),
     members: members.map((member) => ({
@@ -224,6 +514,7 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
       email: member.email,
       avatarUrl: member.avatarUrl ?? null,
       role: normalizeRole(member.role),
+      status: member.status,
       createdAt: member.createdAt.toISOString(),
     })),
     messages: messages.reverse().map((message) => ({
@@ -236,6 +527,7 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
   });
 });
 
+// 9. Update organization
 router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
@@ -254,9 +546,18 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
 
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : undefined;
   const description = typeof req.body?.description === "string" ? req.body.description.trim() : undefined;
-  if (name !== undefined && (name.length < 3 || name.length > 80)) {
-    res.status(400).json({ error: "Nome deve ter entre 3 e 80 caracteres" });
-    return;
+  const isPrivate = typeof req.body?.isPrivate === "boolean" ? req.body.isPrivate : undefined;
+
+  if (name !== undefined) {
+    if (name.length < 3 || name.length > 80) {
+      res.status(400).json({ error: "Nome deve ter entre 3 e 80 caracteres" });
+      return;
+    }
+    const nameRegex = /^[a-zA-Z0-9À-ÿ\s\-_]+$/;
+    if (!nameRegex.test(name)) {
+      res.status(400).json({ error: "Nome inválido. Use apenas letras, números, espaços, hífen ou sublinhado." });
+      return;
+    }
   }
 
   const [organization] = await db
@@ -264,6 +565,7 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
     .set({
       ...(name !== undefined ? { name } : {}),
       ...(description !== undefined ? { description: description || null } : {}),
+      ...(isPrivate !== undefined ? { isPrivate } : {}),
     })
     .where(eq(organizationsTable.id, organizationId))
     .returning();
@@ -273,6 +575,7 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
     name: organization.name,
     description: organization.description ?? null,
     ownerId: organization.ownerId,
+    isPrivate: organization.isPrivate,
     role,
     permissions: getPermissions(role),
     createdAt: organization.createdAt.toISOString(),
@@ -280,6 +583,7 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
   });
 });
 
+// 10. Delete organization
 router.delete("/organizations/:id", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
@@ -299,6 +603,7 @@ router.delete("/organizations/:id", requireAuth, async (req, res): Promise<void>
   res.status(204).send();
 });
 
+// 11. Invite member (inserts as PENDING)
 router.post("/organizations/:id/members", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const currentUserId = req.user!.userId;
@@ -344,13 +649,47 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
     .limit(1);
 
   if (existing) {
-    res.status(409).json({ error: "Usuário já está na organização" });
+    if (existing.status === "ACCEPTED") {
+      res.status(409).json({ error: "Usuário já está na organização" });
+    } else {
+      res.status(409).json({ error: "Usuário já possui um convite pendente para este grupo" });
+    }
+    return;
+  }
+
+  // Enforce 10 organizations max per user
+  const targetUserOrgsCount = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.userId, user.id),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
+  if (targetUserOrgsCount.length >= 10) {
+    res.status(400).json({ error: "O usuário já atingiu o limite de 10 grupos" });
+    return;
+  }
+
+  // Enforce 50 users max per organization
+  const activeMembersCount = await db
+    .select()
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.organizationId, organizationId),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
+  if (activeMembersCount.length >= 50) {
+    res.status(400).json({ error: "O grupo já atingiu o limite de 50 membros" });
     return;
   }
 
   const [member] = await db
     .insert(organizationMembersTable)
-    .values({ organizationId, userId: user.id, role })
+    .values({ organizationId, userId: user.id, role, status: "PENDING" })
     .returning();
 
   res.status(201).json({
@@ -360,10 +699,12 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
     email: user.email,
     avatarUrl: user.avatarUrl ?? null,
     role,
+    status: member.status,
     createdAt: member.createdAt.toISOString(),
   });
 });
 
+// 12. Remove member
 router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const targetUserId = Number(req.params.userId);
@@ -373,19 +714,21 @@ router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res
     return;
   }
 
-  const membership = await requireMembership(organizationId, currentUserId, res);
-  if (!membership) return;
-  const currentRole = normalizeRole(membership.role);
-  const removingSelf = targetUserId === currentUserId;
-  if (!removingSelf && !getPermissions(currentRole).manageMembers) {
-    res.status(403).json({ error: "Sem permissão para remover membros" });
-    return;
-  }
-
   const targetMembership = await getMembership(organizationId, targetUserId);
   if (!targetMembership) {
     res.status(404).json({ error: "Membro não encontrado" });
     return;
+  }
+
+  const removingSelf = targetUserId === currentUserId;
+  
+  if (!removingSelf) {
+    const membership = await requireMembership(organizationId, currentUserId, res);
+    if (!membership) return;
+    if (!getPermissions(normalizeRole(membership.role)).manageMembers) {
+      res.status(403).json({ error: "Sem permissão para remover membros" });
+      return;
+    }
   }
 
   if (normalizeRole(targetMembership.role) === "OWNER") {
@@ -405,6 +748,7 @@ router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res
   res.status(204).send();
 });
 
+// 13. Post message
 router.post("/organizations/:id/messages", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
