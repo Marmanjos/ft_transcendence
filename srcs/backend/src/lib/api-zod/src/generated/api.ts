@@ -165,6 +165,7 @@ export const ListMatchesResponseItem = zod.object({
   "winnerId": zod.number().nullish(),
   "player1Score": zod.number(),
   "player2Score": zod.number(),
+  "aiDifficulty": zod.enum(['EASY', 'MEDIUM', 'HARD']),
   "createdAt": zod.coerce.date(),
   "completedAt": zod.string().nullish()
 })
@@ -175,7 +176,8 @@ export const ListMatchesResponse = zod.array(ListMatchesResponseItem)
  * @summary Create a new single-player match vs AI
  */
 export const CreateMatchBody = zod.object({
-  "mode": zod.enum(['SINGLE_PLAYER', 'MULTIPLAYER'])
+  "mode": zod.enum(['SINGLE_PLAYER', 'MULTIPLAYER']),
+  "aiDifficulty": zod.enum(['EASY', 'MEDIUM', 'HARD']).optional()
 })
 
 export const CreateMatchResponse = zod.object({
@@ -189,6 +191,7 @@ export const CreateMatchResponse = zod.object({
   "winnerId": zod.number().nullish(),
   "player1Score": zod.number(),
   "player2Score": zod.number(),
+  "aiDifficulty": zod.enum(['EASY', 'MEDIUM', 'HARD']),
   "createdAt": zod.coerce.date(),
   "completedAt": zod.string().nullish()
 })

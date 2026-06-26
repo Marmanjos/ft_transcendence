@@ -5,6 +5,7 @@
  * Elemental Duel API — futuristic multiplayer arena game
  * OpenAPI spec version: 0.1.0
  */
+import type { MatchAiDifficulty } from './matchAiDifficulty';
 import type { MatchMode } from './matchMode';
 import type { MatchStatus } from './matchStatus';
 
@@ -23,6 +24,7 @@ export interface Match {
   winnerId?: number | null;
   player1Score: number;
   player2Score: number;
+  aiDifficulty: MatchAiDifficulty;
   createdAt: Date;
   /** @nullable */
   completedAt?: string | null;

@@ -99,6 +99,15 @@ export const MatchMode = {
   MULTIPLAYER: 'MULTIPLAYER',
 } as const;
 
+export type MatchAiDifficulty = typeof MatchAiDifficulty[keyof typeof MatchAiDifficulty];
+
+
+export const MatchAiDifficulty = {
+  EASY: 'EASY',
+  MEDIUM: 'MEDIUM',
+  HARD: 'HARD',
+} as const;
+
 export interface Match {
   id: number;
   player1Id: number;
@@ -114,13 +123,24 @@ export interface Match {
   winnerId?: number | null;
   player1Score: number;
   player2Score: number;
+  aiDifficulty: MatchAiDifficulty;
   createdAt: string;
   /** @nullable */
   completedAt?: string | null;
 }
 
+export type MatchInputAiDifficulty = typeof MatchInputAiDifficulty[keyof typeof MatchInputAiDifficulty];
+
+
+export const MatchInputAiDifficulty = {
+  EASY: 'EASY',
+  MEDIUM: 'MEDIUM',
+  HARD: 'HARD',
+} as const;
+
 export interface MatchInput {
   mode: MatchMode;
+  aiDifficulty?: MatchInputAiDifficulty;
 }
 
 export interface Round {
