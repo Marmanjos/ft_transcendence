@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, MessageSquare, Plus, Shield, Trash2, UsersRound } from "lucide-react";
+import { ArrowLeft, MessageSquare, Plus, Shield, Trash2, UsersRound, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
@@ -33,6 +33,7 @@ interface OrganizationDetail {
   role: "OWNER" | "ADMIN" | "MEMBER";
   memberCount: number;
   isPrivate: boolean;
+  inviteOnly: boolean;
   permissions: {
     update: boolean;
     delete: boolean;
@@ -83,8 +84,25 @@ export default function GroupDetail({ id }: GroupDetailProps) {
     if (!token || !group) return;
     const name = window.prompt("Novo nome do grupo", group.name);
     if (!name?.trim()) return;
-    const description = window.prompt("Nova descrição", group.description ?? "") ?? "";
+    
+    const description = window.prompt("Nova descrição (máximo 200 caracteres)", group.description ?? "") ?? "";
+    if (description.length > 200) {
+      toast({
+        title: "Erro",
+        description: "Descrição excede o limite de 200 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const isPrivate = window.confirm(`Deseja tornar este grupo PRIVADO? (Grupos privados não aparecem nas buscas públicas)\n\nAtualmente: ${group.isPrivate ? "PRIVADO" : "PÚBLICO"}`);
+    
+    let inviteOnly = group.inviteOnly;
+    if (!isPrivate) {
+      inviteOnly = window.confirm(`Deseja tornar este grupo APENAS POR CONVITE? (Se disser sim, o grupo aparecerá nas buscas públicas, mas ninguém poderá entrar diretamente)\n\nAtualmente: ${group.inviteOnly ? "APENAS POR CONVITE" : "ABERTO"}`);
+    } else {
+      inviteOnly = true; // Private is always invite-only
+    }
 
     try {
       const response = await fetch(apiUrl(`/organizations/${id}`), {
@@ -96,7 +114,8 @@ export default function GroupDetail({ id }: GroupDetailProps) {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
-          isPrivate
+          isPrivate,
+          inviteOnly
         }),
       });
       const data = await response.json();
@@ -162,6 +181,36 @@ export default function GroupDetail({ id }: GroupDetailProps) {
     }
   };
 
+  const handleToggleAdmin = async (member: OrganizationMember) => {
+    if (!token) return;
+    const newRole = member.role === "ADMIN" ? "MEMBER" : "ADMIN";
+    const label = newRole === "ADMIN" ? "promover a administrador" : "rebaixar a membro comum";
+    if (!window.confirm(`Deseja ${label} o usuário ${member.username}?`)) return;
+
+    try {
+      const response = await fetch(apiUrl(`/organizations/${id}/members/${member.userId}`), {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao alterar cargo");
+      }
+      await loadGroup();
+      toast({ title: "Cargo atualizado", description: `${member.username} agora é ${newRole}.` });
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível atualizar o cargo.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleRemoveMember = async (member: OrganizationMember) => {
     const isSelf = member.userId === user?.id;
     const confirmMessage = isSelf
@@ -195,6 +244,14 @@ export default function GroupDetail({ id }: GroupDetailProps) {
 
   const handleSendMessage = async () => {
     if (!token || !message.trim()) return;
+    if (message.length > 500) {
+      toast({
+        title: "Erro",
+        description: "Mensagem excede o limite de 500 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const response = await fetch(apiUrl(`/organizations/${id}/messages`), {
@@ -261,13 +318,24 @@ export default function GroupDetail({ id }: GroupDetailProps) {
                 <h1 className="text-3xl font-black uppercase tracking-widest text-primary neon-text">
                   {group.name}
                 </h1>
-                {group.isPrivate && (
-                  <span className="rounded bg-destructive/10 border border-destructive/20 px-2.5 py-0.5 text-xs font-mono uppercase tracking-wider text-destructive">
+                
+                {/* Access tag */}
+                {group.isPrivate ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-destructive/10 border border-destructive/20 px-2 py-0.5 text-xs font-mono uppercase tracking-wider text-destructive">
+                    <Lock className="w-3.5 h-3.5" />
                     Privado
+                  </span>
+                ) : group.inviteOnly ? (
+                  <span className="rounded bg-accent/15 border border-accent/30 px-2.5 py-0.5 text-xs font-mono uppercase tracking-wider text-accent animate-pulse-subtle">
+                    Apenas Convite
+                  </span>
+                ) : (
+                  <span className="rounded bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-xs font-mono uppercase tracking-wider text-primary">
+                    Aberto
                   </span>
                 )}
               </div>
-              <p className="text-muted-foreground font-mono">
+              <p className="text-muted-foreground font-mono mt-1 break-words">
                 {group.description || "Sem descrição"}
               </p>
             </div>
@@ -317,7 +385,7 @@ export default function GroupDetail({ id }: GroupDetailProps) {
               Visibilidade
             </p>
             <p className="mt-1 font-bold text-white">
-              {group.isPrivate ? "Privado" : "Público"}
+              {group.isPrivate ? "Privado" : group.inviteOnly ? "Apenas Convite" : "Aberto"}
             </p>
           </div>
         </div>
@@ -336,25 +404,55 @@ export default function GroupDetail({ id }: GroupDetailProps) {
 
         <div className="grid gap-2">
           {group.members.map((member) => (
-            <div key={member.id} className="flex items-center justify-between rounded-md border border-border bg-background/40 p-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-white">{member.username}</p>
-                  {member.status === "PENDING" && (
-                    <span className="rounded bg-warning/10 border border-warning/20 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-warning animate-pulse">
-                      Pendente
-                    </span>
-                  )}
+            <div key={member.id} className="flex items-center justify-between rounded-md border border-border bg-background/40 p-3 hover:border-primary/30 transition-colors">
+              <Link href={`/profile/${member.userId}`} className="flex-1 hover:opacity-85 transition-opacity cursor-pointer">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-white hover:underline">{member.username}</p>
+                    {member.status === "PENDING" && (
+                      <span className="rounded bg-secondary/20 border border-secondary/30 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-secondary animate-pulse">
+                        Pendente
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                    {member.role}
+                  </p>
                 </div>
-                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                  {member.role}
-                </p>
+              </Link>
+              
+              <div className="flex items-center gap-2">
+                {/* Promote/Demote buttons: only visible to group owner, for members that are not the owner themselves */}
+                {group.role === "OWNER" && member.role !== "OWNER" && member.status === "ACCEPTED" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-mono font-bold uppercase tracking-wider px-2.5 border-primary/30 text-primary hover:bg-primary/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      void handleToggleAdmin(member);
+                    }}
+                  >
+                    {member.role === "ADMIN" ? "Rebaixar" : "Promover"}
+                  </Button>
+                )}
+                
+                {group.permissions.manageMembers && member.role !== "OWNER" && member.userId !== user?.id && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      void handleRemoveMember(member);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                )}
               </div>
-              {group.permissions.manageMembers && member.role !== "OWNER" && member.userId !== user?.id && (
-                <Button variant="ghost" size="icon" onClick={() => void handleRemoveMember(member)}>
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </Button>
-              )}
             </div>
           ))}
         </div>
@@ -377,7 +475,10 @@ export default function GroupDetail({ id }: GroupDetailProps) {
                 <p className="text-xs font-mono uppercase tracking-widest text-primary">
                   {item.senderUsername}
                 </p>
-                <p className="text-white mt-1">{item.text}</p>
+                {/* Fix side scroll/bars by using wrap utilities */}
+                <p className="text-white mt-1 break-words whitespace-pre-wrap font-mono text-sm leading-relaxed">
+                  {item.text}
+                </p>
               </div>
             ))
           )}
@@ -387,7 +488,8 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           <Input
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder="Escrever mensagem..."
+            placeholder="Escrever mensagem... (máximo 500 caracteres)"
+            maxLength={500}
             className="h-11 border-primary/20 bg-background/40"
             onKeyDown={(e) => e.key === "Enter" && void handleSendMessage()}
           />
