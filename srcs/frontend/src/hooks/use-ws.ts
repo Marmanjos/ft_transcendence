@@ -53,39 +53,58 @@ export function useWs(token: string | null) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) return undefined;
 
     const url = createWsUrl(token);
+    let reconnectTimeoutId: NodeJS.Timeout | null = null;
+    let ws: WebSocket | null = null;
+    let isCleanup = false;
 
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    function connect() {
+      if (isCleanup) return;
 
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => {
-      setConnected(false);
-      wsRef.current = null;
-    };
-    ws.onerror = () => {
-      setConnected(false);
-    };
-    ws.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data as string) as ServerMsg;
-        handlersRef.current.forEach((h) => h(msg));
-      } catch {
-        // ignore malformed
-      }
-    };
+      ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setConnected(true);
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        wsRef.current = null;
+        if (!isCleanup) {
+          reconnectTimeoutId = setTimeout(connect, 2000);
+        }
+      };
+
+      ws.onerror = () => {
+        setConnected(false);
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data as string) as ServerMsg;
+          handlersRef.current.forEach((h) => h(msg));
+        } catch {
+          // ignore malformed
+        }
+      };
+    }
+
+    connect();
 
     const pingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "PING" }));
       }
     }, 25000);
 
     return () => {
+      isCleanup = true;
       clearInterval(pingInterval);
-      ws.close();
+      if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+      if (ws) ws.close();
     };
   }, [token]);
 
