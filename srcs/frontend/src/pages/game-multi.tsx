@@ -54,6 +54,8 @@ export default function GameMulti() {
   const [errorMsg, setErrorMsg] = useState("");
   const [paused, setPaused] = useState(false);
   const [clashAnimating, setClashAnimating] = useState(false);
+  const [opponentOffline, setOpponentOffline] = useState(false);
+  const [offlineCountdown, setOfflineCountdown] = useState(8);
 
   const { send, onMessage, connected } = useWs(token);
 
@@ -77,6 +79,7 @@ export default function GameMulti() {
           setRoundResult(null);
           setSelectedElemental(null);
           setMatchOver(null);
+          setOpponentOffline(false);
           setState("MATCH_FOUND");
           setTimeout(() => setState("SELECTING"), 2500);
           break;
@@ -121,8 +124,18 @@ export default function GameMulti() {
           setState("REMATCH_WAITING");
           break;
 
+        case "OPPONENT_TEMPORARILY_DISCONNECTED":
+          setOpponentOffline(true);
+          setOfflineCountdown(8);
+          break;
+
+        case "OPPONENT_RECONNECTED":
+          setOpponentOffline(false);
+          break;
+
         case "OPPONENT_DISCONNECTED":
           setState("OPPONENT_DISCONNECTED");
+          setOpponentOffline(false);
           break;
 
         case "ERROR":
@@ -133,6 +146,15 @@ export default function GameMulti() {
     });
     return off;
   }, [onMessage, matchInfo]);
+
+  useEffect(() => {
+    if (!opponentOffline) return undefined;
+    if (offlineCountdown <= 0) return undefined;
+    const interval = setInterval(() => {
+      setOfflineCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [opponentOffline, offlineCountdown]);
 
   const handleSelect = (elemental: Elemental) => {
     if (state !== "SELECTING" || !matchInfo || paused) return;
@@ -478,6 +500,39 @@ export default function GameMulti() {
                 <Button onClick={() => setLocation("/lobby")} size="lg" className="h-12 px-10 font-bold uppercase tracking-widest neon-box">
                   Retornar ao Lobby
                 </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* OPPONENT TEMPORARILY OFFLINE */}
+          {inArena && opponentOffline && state !== "OPPONENT_DISCONNECTED" && (
+            <motion.div key="opp_offline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 flex items-center justify-center p-4"
+              style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
+              <div className="flex flex-col items-center text-center gap-6 p-10 border border-destructive/30 rounded-2xl bg-card/80 max-w-md mx-4 animate-pulse">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 border-4 border-destructive/20 rounded-full" />
+                  <div className="absolute inset-0 border-4 border-destructive border-t-transparent rounded-full animate-spin" />
+                </div>
+                <h2 className="text-3xl font-black uppercase tracking-widest text-destructive neon-text">Oponente Offline</h2>
+                <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                  O adversário perdeu a ligação.<br />Aguardando retorno em <span className="text-destructive font-black text-xl">{offlineCountdown}s</span>...
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* SELF DISCONNECTED */}
+          {inArena && !connected && (
+            <motion.div key="self_offline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: "rgba(0,0,0,0.9)", backdropFilter: "blur(12px)" }}>
+              <div className="flex flex-col items-center text-center gap-6 p-10 border border-primary/40 rounded-2xl bg-card/80 max-w-md mx-4">
+                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                <h2 className="text-3xl font-black uppercase tracking-widest text-primary neon-text">Perda de Ligação</h2>
+                <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                  Perdeste a ligação ao servidor.<br />A tentar restabelecer conexão...
+                </p>
               </div>
             </motion.div>
           )}
