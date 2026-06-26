@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, ChevronUp, Copy, LogIn, MessageSquare, Plus, Send, Users } from "lucide-react";
 import { Elemental } from "@workspace/api-client-react";
@@ -543,7 +543,9 @@ export default function RoomPage() {
                             <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                               <div className={`max-w-[85%] rounded-2xl px-3 py-2 border ${mine ? "border-primary/40 bg-primary/10" : "border-border bg-white/5"}`}>
                                 <div className="flex items-center justify-between gap-3 mb-1">
-                                  <p className={`text-[10px] font-mono uppercase tracking-widest ${mine ? "text-primary" : "text-secondary"}`}>{mine ? "Você" : message.senderUsername}</p>
+                                  <Link href={`/profile/${message.senderId}`} className={`text-[10px] font-mono uppercase tracking-widest hover:underline cursor-pointer ${mine ? "text-primary" : "text-secondary"}`}>
+                                    {mine ? "Você" : message.senderUsername}
+                                  </Link>
                                   <p className="text-[10px] font-mono text-muted-foreground">{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                                 </div>
                                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</p>

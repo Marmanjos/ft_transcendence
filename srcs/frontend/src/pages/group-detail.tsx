@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, MessageSquare, Plus, Shield, Trash2, UsersRound, Lock } from "lucide-react";
+import { ArrowLeft, MessageSquare, Plus, Shield, Trash2, UsersRound, Lock, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useWs } from "@/hooks/use-ws";
 
 interface GroupDetailProps {
   id: number;
@@ -56,9 +57,34 @@ export default function GroupDetail({ id }: GroupDetailProps) {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  const loadGroup = async () => {
+  const { onMessage } = useWs(token);
+
+  useEffect(() => {
     if (!token) return;
-    setLoading(true);
+    const off = onMessage((msg) => {
+      if (msg.type === "ORG_MESSAGE" && msg.organizationId === id) {
+        setGroup((prev) => {
+          if (!prev) return null;
+          if (prev.messages.some((m) => m.id === msg.id)) return prev;
+          return {
+            ...prev,
+            messages: [{
+              id: msg.id,
+              senderId: msg.senderId,
+              senderUsername: msg.senderUsername,
+              text: msg.text,
+              createdAt: msg.createdAt,
+            }, ...prev.messages],
+          };
+        });
+      }
+    });
+    return off;
+  }, [id, token, onMessage]);
+
+  const loadGroup = async (showLoading = false) => {
+    if (!token) return;
+    if (showLoading) setLoading(true);
     try {
       const response = await fetch(apiUrl(`/organizations/${id}`), {
         headers: { Authorization: `Bearer ${token}` },
@@ -72,12 +98,12 @@ export default function GroupDetail({ id }: GroupDetailProps) {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadGroup();
+    void loadGroup(true);
   }, [id, token]);
 
   const handleUpdateGroup = async () => {
@@ -264,7 +290,6 @@ export default function GroupDetail({ id }: GroupDetailProps) {
       });
       if (!response.ok) throw new Error("Falha ao enviar mensagem");
       setMessage("");
-      await loadGroup();
     } catch {
       toast({
         title: "Erro",
@@ -426,19 +451,20 @@ export default function GroupDetail({ id }: GroupDetailProps) {
                 {group.role === "OWNER" && member.role !== "OWNER" && member.status === "ACCEPTED" && (
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="h-8 text-xs font-mono font-bold uppercase tracking-wider px-2.5 border-primary/30 text-primary hover:bg-primary/10"
+                    size="icon"
+                    className="h-8 w-8 border-primary/30 text-primary hover:bg-primary/10"
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
                       void handleToggleAdmin(member);
                     }}
+                    title={member.role === "ADMIN" ? "Rebaixar" : "Promover"}
                   >
-                    {member.role === "ADMIN" ? "Rebaixar" : "Promover"}
+                    {member.role === "ADMIN" ? <ArrowDown className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
                   </Button>
                 )}
                 
-                {group.permissions.manageMembers && member.role !== "OWNER" && member.userId !== user?.id && (
+                {group.permissions.manageMembers && member.role !== "OWNER" && member.userId !== user?.id && !(group.role === "ADMIN" && member.role === "ADMIN") && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -464,6 +490,20 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           <h2 className="text-xl font-bold uppercase tracking-widest">Mensagens</h2>
         </div>
 
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="Escrever mensagem... (máximo 500 caracteres)"
+            maxLength={500}
+            className="h-11 border-primary/20 bg-background/40 flex-1"
+            onKeyDown={(e) => e.key === "Enter" && void handleSendMessage()}
+          />
+          <Button onClick={handleSendMessage} className="h-11 px-6 font-bold uppercase tracking-wider">
+            Enviar
+          </Button>
+        </div>
+
         <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
           {group.messages.length === 0 ? (
             <p className="text-center text-muted-foreground font-mono py-6">
@@ -472,10 +512,9 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           ) : (
             group.messages.map((item) => (
               <div key={item.id} className="rounded-md border border-border bg-background/40 p-3">
-                <p className="text-xs font-mono uppercase tracking-widest text-primary">
+                <Link href={`/profile/${item.senderId}`} className="text-xs font-mono uppercase tracking-widest text-primary hover:underline hover:opacity-85 cursor-pointer">
                   {item.senderUsername}
-                </p>
-                {/* Fix side scroll/bars by using wrap utilities */}
+                </Link>
                 <p className="text-white mt-1 break-words whitespace-pre-wrap font-mono text-sm leading-relaxed">
                   {item.text}
                 </p>
@@ -484,19 +523,6 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           )}
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder="Escrever mensagem... (máximo 500 caracteres)"
-            maxLength={500}
-            className="h-11 border-primary/20 bg-background/40"
-            onKeyDown={(e) => e.key === "Enter" && void handleSendMessage()}
-          />
-          <Button onClick={handleSendMessage} className="h-11 px-6 font-bold uppercase tracking-wider">
-            Enviar
-          </Button>
-        </div>
       </section>
     </div>
   );

@@ -21,6 +21,8 @@ export type ServerMsg =
   | { type: "FRIEND_UPDATE"; reason: "REQUEST_RECEIVED" | "REQUEST_ACCEPTED" | "REMOVED"; fromUsername?: string }
   | { type: "OPPONENT_TEMPORARILY_DISCONNECTED" }
   | { type: "OPPONENT_RECONNECTED" }
+  | { type: "ORG_MESSAGE"; organizationId: number; id: number; senderId: number; senderUsername: string; text: string; createdAt: string }
+  | { type: "ORG_INVITE_RECEIVED"; organizationId: number }
   | { type: "ERROR"; message: string }
   | { type: "PONG" };
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useWs } from "@/hooks/use-ws";
 
 interface OrganizationSummary {
   id: number;
@@ -44,6 +45,7 @@ function apiUrl(path: string) {
 export default function Groups() {
   const { token } = useAuth();
   const { toast } = useToast();
+  const { onMessage } = useWs(token);
   const [groups, setGroups] = useState<OrganizationSummary[]>([]);
   const [invites, setInvites] = useState<OrganizationInvite[]>([]);
   const [publicGroups, setPublicGroups] = useState<PublicOrganization[]>([]);
@@ -125,6 +127,20 @@ export default function Groups() {
     void loadInvites();
     void loadPublicGroups("");
   }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const off = onMessage((msg) => {
+      if (msg.type === "ORG_INVITE_RECEIVED") {
+        void loadInvites();
+        toast({
+          title: "Novo Convite",
+          description: "Você recebeu um convite para entrar em um grupo.",
+        });
+      }
+    });
+    return off;
+  }, [token, onMessage]);
 
   const handleCreateGroup = async () => {
     if (!token) return;

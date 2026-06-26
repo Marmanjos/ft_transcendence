@@ -28,6 +28,7 @@ type ServerMsg =
   | { type: "FRIEND_UPDATE"; reason: "REQUEST_RECEIVED" | "REQUEST_ACCEPTED" | "REMOVED"; fromUsername?: string }
   | { type: "OPPONENT_TEMPORARILY_DISCONNECTED" }
   | { type: "OPPONENT_RECONNECTED" }
+  | { type: "ORG_MESSAGE"; organizationId: number; id: number; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ERROR"; message: string }
   | { type: "PONG" };
 
@@ -103,7 +104,7 @@ export function sendToUser(userId: number, msg: ServerMsg) {
   }
 }
 
-function broadcastToUsers(userIds: number[], msg: ServerMsg) {
+export function broadcastToUsers(userIds: number[], msg: ServerMsg) {
   if (userIds.length === 0) return;
   const payload = JSON.stringify(msg);
   for (const userId of userIds) {

@@ -8,6 +8,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { requireAuth } from "../lib/auth.js";
+import { broadcastToUsers } from "../lib/wsServer.js";
 
 const router: IRouter = Router();
 
@@ -25,7 +26,7 @@ function getPermissions(role: OrganizationRole) {
   return {
     create: role === "OWNER" || role === "ADMIN",
     read: true,
-    update: role === "OWNER" || role === "ADMIN",
+    update: role === "OWNER",
     delete: role === "OWNER",
     manageMembers: role === "OWNER" || role === "ADMIN",
   };
@@ -533,7 +534,7 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
       status: member.status,
       createdAt: member.createdAt.toISOString(),
     })),
-    messages: messages.reverse().map((message) => ({
+    messages: messages.map((message) => ({
       id: message.id,
       senderId: message.senderId,
       senderUsername: message.senderUsername,
@@ -543,7 +544,7 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
   });
 });
 
-// 9. Update organization
+// 9. Update organization — admins can only update name/description, NOT visibility
 router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
@@ -562,8 +563,9 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
 
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : undefined;
   const description = typeof req.body?.description === "string" ? req.body.description.trim() : undefined;
-  const isPrivate = typeof req.body?.isPrivate === "boolean" ? req.body.isPrivate : undefined;
-  const inviteOnly = typeof req.body?.inviteOnly === "boolean" ? req.body.inviteOnly : undefined;
+  // Only OWNER can change visibility settings
+  const isPrivate = role === "OWNER" && typeof req.body?.isPrivate === "boolean" ? req.body.isPrivate : undefined;
+  const inviteOnly = role === "OWNER" && typeof req.body?.inviteOnly === "boolean" ? req.body.inviteOnly : undefined;
 
   if (name !== undefined) {
     if (name.length < 3 || name.length > 80) {
@@ -716,6 +718,11 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
     .values({ organizationId, userId: user.id, role, status: "PENDING" })
     .returning();
 
+  broadcastToUsers(
+    [user.id],
+    { type: "ORG_INVITE_RECEIVED", organizationId }
+  );
+
   res.status(201).json({
     id: member.id,
     userId: user.id,
@@ -792,12 +799,18 @@ router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res
   }
 
   const removingSelf = targetUserId === currentUserId;
-  
+
   if (!removingSelf) {
     const membership = await requireMembership(organizationId, currentUserId, res);
     if (!membership) return;
-    if (!getPermissions(normalizeRole(membership.role)).manageMembers) {
+    const currentRole = normalizeRole(membership.role);
+    if (!getPermissions(currentRole).manageMembers) {
       res.status(403).json({ error: "Sem permissão para remover membros" });
+      return;
+    }
+    // Admins cannot kick other admins, only OWNER can
+    if (currentRole === "ADMIN" && normalizeRole(targetMembership.role) === "ADMIN") {
+      res.status(403).json({ error: "Admins não podem remover outros admins" });
       return;
     }
   }
@@ -819,7 +832,7 @@ router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res
   res.status(204).send();
 });
 
-// 14. Post message (Max 500 characters)
+// 14. Post message (Max 500 characters) — broadcasts via WS to all accepted members
 router.post("/organizations/:id/messages", requireAuth, async (req, res): Promise<void> => {
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
@@ -842,13 +855,31 @@ router.post("/organizations/:id/messages", requireAuth, async (req, res): Promis
     .values({ organizationId, senderId: userId, text })
     .returning();
 
-  res.status(201).json({
+  const payload = {
     id: message.id,
     senderId: userId,
     senderUsername: req.user!.username,
     text: message.text,
     createdAt: message.createdAt.toISOString(),
-  });
+  };
+
+  // Broadcast to all accepted members in real-time
+  const acceptedMembers = await db
+    .select({ userId: organizationMembersTable.userId })
+    .from(organizationMembersTable)
+    .where(
+      and(
+        eq(organizationMembersTable.organizationId, organizationId),
+        eq(organizationMembersTable.status, "ACCEPTED")
+      )
+    );
+
+  broadcastToUsers(
+    acceptedMembers.map((m) => m.userId),
+    { type: "ORG_MESSAGE", organizationId, ...payload }
+  );
+
+  res.status(201).json(payload);
 });
 
 export default router;
