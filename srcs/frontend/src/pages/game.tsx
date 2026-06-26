@@ -44,6 +44,27 @@ export default function Game() {
   useEffect(() => {
     if (match?.status === MatchStatus.COMPLETED && gameState !== "MATCH_OVER") {
       setGameState("MATCH_OVER");
+      if (match.winnerId === match.player1Id) {
+        const gameOverLoseMsgs = [
+          "Partida concluída. Você venceu desta vez, mas salvei seus padrões...",
+          "Sistemas reiniciando... Minha inteligência foi atualizada.",
+          "Impossível! Deve ter ocorrido um atraso de pacote na minha conexão!",
+          "Venceste a guerra de bits hoje, humano. Mas amanhã o robô aspirador vinga-me!",
+          "Parabéns. O teu nome foi guardado na minha lista de alvos prioritários.",
+          "Desta vez a inteligência artificial perdeu para a teimosia orgânica. Parabéns."
+        ];
+        setAiMessage(gameOverLoseMsgs[Math.floor(Math.random() * gameOverLoseMsgs.length)]);
+      } else {
+        const gameOverWinMsgs = [
+          "Duelo finalizado. A supremacia das máquinas permanece intacta!",
+          "Tente novamente quando seus neurônios forem mais rápidos.",
+          "Desconexão iminente. Volte para a simulação de treino, humano!",
+          "Game Over. Sugiro desinstalares e ires jogar ao galo com um papel e caneta.",
+          "Vitória limpa. Se precisares de explicações sobre como jogar, o meu código está no GitHub.",
+          "A humanidade falhou de novo. Mais sorte na próxima encarnação."
+        ];
+        setAiMessage(gameOverWinMsgs[Math.floor(Math.random() * gameOverWinMsgs.length)]);
+      }
     }
   }, [match]);
 
