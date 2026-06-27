@@ -21,6 +21,8 @@ import { useState, useEffect } from "react";
 import { useUpdateUser } from "@/lib/api-client-react/src/generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { OnlineDot } from "@/components/online-dot";
 
 const ElementalName = {
   [Elemental.TITAN]: "TITAN",
@@ -34,11 +36,12 @@ export default function Profile({ id }: { id: number }) {
   const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
   const [isEditOpen, setIsEditOpen] = useState(false);
-
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
-  const { user: authUser, token } = useAuth();
+  const { user: authUser, token } = useAuth(); // ← primeiro
+  const { isOnline } = useOnlineStatus([id], token); // ← depois, token já existe
+
   const { send } = useWs(token);
   const [, setLocation] = useLocation();
   const { data: user, isLoading: loadingUser } = useGetUser(id, { query: { queryKey: ["/api/users", id], enabled: !!id } });
@@ -185,18 +188,19 @@ export default function Profile({ id }: { id: number }) {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row items-center gap-8 bg-card/50 border border-primary/20 p-8 rounded-xl backdrop-blur relative overflow-hidden">
-
-        <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box">
-          {user.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              className="w-full h-full object-cover rounded-full"
-            />
-          ) : (
-            user.username.charAt(0)
-          )}
+        <div className="relative w-32 h-32">
+          <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                className="w-full h-full object-cover rounded-full"
+              />
+            ) : (
+              user.username.charAt(0)
+            )}
+          </div>
+          {!isOwnProfile && <OnlineDot online={isOnline(id)} className="w-4 h-4 border-2" />}
         </div>
-        
         <div className="text-center md:text-left z-10">
           <h1 className="text-4xl font-black uppercase tracking-widest neon-text text-white">
             {user.username}

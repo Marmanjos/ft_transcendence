@@ -14,11 +14,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useWs, type ServerMsg } from "@/hooks/use-ws";
 import { useEffect } from "react";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { OnlineDot } from "@/components/online-dot";
 
 export default function Friends() {
+  const { token } = useAuth();
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { token } = useAuth();
   const { onMessage } = useWs(token);
 
   const [activeTab, setActiveTab] = useState<"active" | "received" | "sent">("active");
@@ -38,6 +41,7 @@ export default function Friends() {
   const { data: friendships, isLoading } = useListFriends({
     query: { queryKey: ["/api/friends"] }
   });
+
   const addFriendMutation = useAddFriend();
   const acceptFriendMutation = useAcceptFriend();
   const removeFriendMutation = useRemoveFriend();
@@ -45,6 +49,9 @@ export default function Friends() {
   const activeFriends = friendships?.filter(f => f.status === "ACCEPTED") || [];
   const receivedRequests = friendships?.filter(f => f.status === "REQUEST_RECEIVED") || [];
   const sentRequests = friendships?.filter(f => f.status === "PENDING") || [];
+
+  const activeFriendIds = activeFriends.map(f => f.friend.id);
+  const { isOnline } = useOnlineStatus(activeFriendIds, token);
 
   const handleAddFriend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,12 +248,15 @@ export default function Friends() {
                           {activeFriends.map((f) => (
                             <div key={f.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-black/20 hover:border-primary/40 transition-all">
                               <Link href={`/profile/${f.friend.id}`} className="flex items-center gap-3 cursor-pointer group">
-                                <div className="w-10 h-10 rounded-full bg-background border border-primary/45 flex items-center justify-center font-bold text-primary group-hover:neon-box transition-all overflow-hidden">
-                                  {f.friend.avatarUrl ? (
-                                    <img src={f.friend.avatarUrl} className="w-full h-full object-cover" />
-                                  ) : (
-                                    f.friend.username.charAt(0).toUpperCase()
-                                  )}
+                                <div className="relative w-10 h-10">
+                                  <div className="w-10 h-10 rounded-full bg-background border border-primary/45 flex items-center justify-center font-bold text-primary group-hover:neon-box transition-all overflow-hidden">
+                                    {f.friend.avatarUrl ? (
+                                      <img src={f.friend.avatarUrl} className="w-full h-full object-cover" />
+                                    ) : (
+                                      f.friend.username.charAt(0).toUpperCase()
+                                    )}
+                                  </div>
+                                  <OnlineDot online={isOnline(f.friend.id)} />
                                 </div>
                                 <div>
                                   <h3 className="font-bold text-white group-hover:text-primary transition-colors">{f.friend.username}</h3>
