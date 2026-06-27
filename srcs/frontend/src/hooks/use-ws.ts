@@ -24,7 +24,8 @@ export type ServerMsg =
   | { type: "ORG_MESSAGE"; organizationId: number; id: number; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ORG_INVITE_RECEIVED"; organizationId: number }
   | { type: "ERROR"; message: string }
-  | { type: "PONG" };
+  | { type: "PONG" }
+  | { type: "NOTIFICATION"; id: number; notifType: string; payload: unknown; createdAt: string };
 
 export type ClientMsg =
   | { type: "JOIN_QUEUE" }
