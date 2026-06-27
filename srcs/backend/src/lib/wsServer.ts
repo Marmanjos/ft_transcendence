@@ -16,9 +16,9 @@ type ServerMsg =
   | { type: "REMATCH_OFFERED" }
   | { type: "REMATCH_WAITING" }
   | { type: "OPPONENT_DISCONNECTED" }
-  | { type: "ROOM_CREATED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
-  | { type: "ROOM_JOINED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
-  | { type: "ROOM_UPDATED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_CREATED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_JOINED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_UPDATED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
   | { type: "ROOM_CHAT"; code: string; id: string; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ROOM_PLAYER_LEFT"; code: string; username: string }
   | { type: "ROOM_CLOSED"; code: string; reason: "host_left" | "closed" }
@@ -37,7 +37,7 @@ type ClientMsg =
   | { type: "LEAVE_QUEUE" }
   | { type: "SUBMIT_CHOICE"; matchId: number; elemental: Elemental }
   | { type: "OFFER_REMATCH"; matchId: number }
-  | { type: "CREATE_ROOM" }
+  | { type: "CREATE_ROOM"; mode?: "1v1" | "3v3" }
   | { type: "JOIN_ROOM"; code: string }
   | { type: "LEAVE_ROOM" }
   | { type: "SEND_ROOM_CHAT"; text: string }
@@ -71,7 +71,8 @@ interface PartyRoomMessage {
 interface PartyRoom {
   code: string;
   host: ConnectedPlayer;
-  guest: ConnectedPlayer | null;
+  guests: ConnectedPlayer[];
+  mode: "1v1" | "3v3";
   matchId: number | null;
   messages: PartyRoomMessage[];
 }
@@ -135,8 +136,11 @@ function updatePlayerSocket(userId: number, newWs: WebSocket) {
   for (const room of partyRooms.values()) {
     if (room.host.userId === userId) {
       room.host.ws = newWs;
-    } else if (room.guest && room.guest.userId === userId) {
-      room.guest.ws = newWs;
+    } else {
+      const guest = room.guests.find((player) => player.userId === userId);
+      if (guest) {
+        guest.ws = newWs;
+      }
     }
   }
 }
@@ -215,11 +219,13 @@ function generateRoomCode(): string {
 }
 
 function serializePartyRoom(room: PartyRoom) {
+  const guestUsernames = room.guests.map((guest) => guest.username);
   return {
     code: room.code,
     hostUsername: room.host.username,
-    guestUsername: room.guest?.username ?? null,
-    canChat: Boolean(room.guest),
+    guestUsername: guestUsernames[0] ?? null,
+    guestUsernames,
+    canChat: room.guests.length > 0,
     matchId: room.matchId,
   };
 }
@@ -237,14 +243,12 @@ function getPartyRoomByUserId(userId: number): PartyRoom | null {
 
 function broadcastPartyRoomState(room: PartyRoom) {
   const state = serializePartyRoom(room);
-  const userIds = [room.host.userId];
-  if (room.guest) userIds.push(room.guest.userId);
+  const userIds = [room.host.userId, ...room.guests.map((guest) => guest.userId)];
   broadcastToUsers(userIds, { type: "ROOM_UPDATED", ...state });
 }
 
 function broadcastPartyRoomChat(room: PartyRoom, message: PartyRoomMessage) {
-  const userIds = [room.host.userId];
-  if (room.guest) userIds.push(room.guest.userId);
+  const userIds = [room.host.userId, ...room.guests.map((guest) => guest.userId)];
   broadcastToUsers(userIds, { type: "ROOM_CHAT" as const, code: room.code, ...message });
 }
 
@@ -284,25 +288,28 @@ function detachPlayerFromPartyRoom(userId: number, reason: "host_left" | "closed
   const room = getPartyRoomByUserId(userId);
   if (!room) return;
 
-  const departingUsername = room.host.userId === userId ? room.host.username : (room.guest?.username ?? "Convidado");
+  const departingUsername =
+    room.host.userId === userId
+      ? room.host.username
+      : (room.guests.find((guest) => guest.userId === userId)?.username ?? "Convidado");
 
   if (room.host.userId === userId) {
-    if (room.guest) {
-      sendToUser(room.guest.userId, { type: "ROOM_CLOSED", code: room.code, reason });
-      playerPartyRoom.delete(room.guest.userId);
+    for (const guest of room.guests) {
+      sendToUser(guest.userId, { type: "ROOM_CLOSED", code: room.code, reason });
+      playerPartyRoom.delete(guest.userId);
     }
     partyRooms.delete(room.code);
     playerPartyRoom.delete(room.host.userId);
     return;
   }
 
-  room.guest = null;
+  room.guests = room.guests.filter((guest) => guest.userId !== userId);
   playerPartyRoom.delete(userId);
   sendToUser(room.host.userId, { type: "ROOM_PLAYER_LEFT", code: room.code, username: departingUsername });
   broadcastPartyRoomState(room);
 }
 
-async function handleCreateRoom(player: ConnectedPlayer) {
+async function handleCreateRoom(player: ConnectedPlayer, mode: "1v1" | "3v3" = "1v1") {
   if (getPartyRoomByUserId(player.userId)) {
     sendToUser(player.userId, { type: "ERROR", message: "Você já está em uma sala." });
     return;
@@ -312,7 +319,8 @@ async function handleCreateRoom(player: ConnectedPlayer) {
   const room: PartyRoom = {
     code,
     host: player,
-    guest: null,
+    guests: [],
+    mode,
     matchId: null,
     messages: [],
   };
@@ -337,7 +345,8 @@ async function handleInviteToPlay(player: ConnectedPlayer, targetUserId: number)
     room = {
       code,
       host: player,
-      guest: null,
+      guests: [],
+      mode: "1v1",
       matchId: null,
       messages: [],
     };
@@ -371,7 +380,10 @@ async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
     return;
   }
 
-  if (room.guest && room.guest.userId !== player.userId) {
+  const alreadyInRoom =
+    room.host.userId === player.userId || room.guests.some((guest) => guest.userId === player.userId);
+  const maxGuests = room.mode === "3v3" ? 2 : 1;
+  if (!alreadyInRoom && room.guests.length >= maxGuests) {
     sendToUser(player.userId, { type: "ROOM_FULL", code });
     return;
   }
@@ -381,30 +393,14 @@ async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
     return;
   }
 
-  room.guest = player;
+  if (!room.guests.some((guest) => guest.userId === player.userId)) {
+    room.guests.push(player);
+  }
   playerPartyRoom.set(player.userId, room.code);
 
-  if (room.matchId === null) {
-    try {
-      room.matchId = await createMultiPlayerMatch(room.host, room.guest);
-      logger.info({ roomCode: room.code, matchId: room.matchId, host: room.host.userId, guest: room.guest.userId }, "Room match created");
-    } catch (err) {
-      logger.error({ err }, "Failed to create room match");
-      sendToUser(room.host.userId, { type: "ERROR", message: "Falha ao iniciar a partida da sala." });
-      sendToUser(player.userId, { type: "ERROR", message: "Falha ao iniciar a partida da sala." });
-      room.guest = null;
-      playerPartyRoom.delete(player.userId);
-      return;
-    }
-  }
-
   const state = serializePartyRoom(room);
-  sendToUser(room.host.ws, { type: "ROOM_UPDATED", ...state });
+  sendToUser(room.host.userId, { type: "ROOM_UPDATED", ...state });
   sendToUser(player.userId, { type: "ROOM_JOINED", ...state });
-
-  if (room.matchId !== null) {
-    sendMatchFound(room.host, room.guest, room.matchId);
-  }
 
   if (room.messages.length > 0) {
     for (const message of room.messages.slice(-20)) {
@@ -424,8 +420,8 @@ function handleRoomChat(player: ConnectedPlayer, text: string) {
     return;
   }
 
-  if (!room.guest) {
-    sendToUser(player.userId, { type: "ERROR", message: "A sala precisa de dois jogadores para o chat." });
+  if (room.guests.length === 0) {
+    sendToUser(player.userId, { type: "ERROR", message: "A sala precisa de pelo menos dois jogadores para o chat." });
     return;
   }
 
@@ -778,7 +774,7 @@ export function attachWsServer(server: Server) {
           await handleOfferRematch(player, msg.matchId);
           break;
         case "CREATE_ROOM":
-          await handleCreateRoom(player);
+          await handleCreateRoom(player, msg.mode ?? "1v1");
           break;
         case "JOIN_ROOM":
           await handleJoinRoom(player, msg.code);
