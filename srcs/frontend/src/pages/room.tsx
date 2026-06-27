@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, ChevronUp, Copy, LogIn, MessageSquare, Plus, Send, Users } from "lucide-react";
@@ -10,6 +10,9 @@ import { ElementalCard } from "@/components/elemental-card";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useWs, type ServerMsg } from "@/hooks/use-ws";
+import { clearRoomSession, loadRoomSession, saveRoomSession } from "@/lib/room-session";
+
+const ROOM_PATH = "/room" as const;
 
 interface RoomState {
   code: string;
@@ -52,8 +55,15 @@ export default function RoomPage() {
   const { toast } = useToast();
   const { send, onMessage, connected } = useWs(token);
 
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialCode = searchParams.get("code")?.trim().toUpperCase() ?? "";
+  const persistedRoom = loadRoomSession();
+  const initialRoomCode = initialCode || (persistedRoom?.path === ROOM_PATH ? persistedRoom.code : "");
+  const autoJoinSent = useRef(false);
+
   const [roomState, setRoomState] = useState<RoomState | null>(null);
-  const [roomCode, setRoomCode] = useState("");
+  const [activeRoomCode, setActiveRoomCode] = useState(initialRoomCode);
+  const [roomCode, setRoomCode] = useState(initialCode);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -73,6 +83,8 @@ export default function RoomPage() {
 
   const isArena = Boolean(matchInfo);
   const canChat = Boolean(roomState?.canChat);
+  const roomViewActive = roomState !== null || activeRoomCode !== "";
+  const roomViewCode = roomState?.code ?? activeRoomCode;
   const yourScore = matchInfo?.yourSide === "player1" ? scores.player1Score : scores.player2Score;
   const opponentScore = matchInfo?.yourSide === "player1" ? scores.player2Score : scores.player1Score;
   const isWinner = matchOver ? (matchInfo?.yourSide === "player1" ? matchOver.winnerId === user?.id : matchOver.winnerId === user?.id) : false;
@@ -96,7 +108,11 @@ export default function RoomPage() {
             canChat: msg.canChat,
             matchId: msg.matchId,
           });
-          setBusy(false);
+          setActiveRoomCode(msg.code);
+          saveRoomSession({ code: msg.code, path: ROOM_PATH });
+          if (window.location.pathname !== ROOM_PATH || window.location.search !== `?code=${encodeURIComponent(msg.code)}`) {
+            setLocation(`${ROOM_PATH}?code=${encodeURIComponent(msg.code)}`);
+          }
           if (msg.matchId && msg.guestUsername) {
             const yourSide = msg.hostUsername === user?.username ? "player1" : "player2";
             const opponentUsername = yourSide === "player1" ? msg.guestUsername : msg.hostUsername;
@@ -111,8 +127,9 @@ export default function RoomPage() {
             toast({ title: "Partida pronta", description: `${opponentUsername} entrou na arena.` });
             setTimeout(() => setArenaState("SELECTING"), 1200);
           } else {
-            setStatus(msg.type === "ROOM_CREATED" ? "creating" : isArena ? "arena" : "joining");
+            setStatus(msg.type === "ROOM_CREATED" ? "creating" : "idle");
           }
+          setBusy(false);
           break;
         case "MATCH_FOUND":
           setMatchInfo({ matchId: msg.matchId, opponentUsername: msg.opponentUsername, yourSide: msg.yourSide });
@@ -181,6 +198,8 @@ export default function RoomPage() {
           break;
         case "ROOM_CLOSED":
           setRoomState(null);
+          setActiveRoomCode("");
+          clearRoomSession();
           setMessages([]);
           setMatchInfo(null);
           setSelectedElemental(null);
@@ -191,14 +210,22 @@ export default function RoomPage() {
           setStatus("idle");
           setBusy(false);
           setChatOpen(false);
+          setLocation(ROOM_PATH);
           toast({ title: "Sala fechada", description: "A sala foi encerrada pelo host.", variant: "destructive" });
           break;
         case "ROOM_FULL":
           setBusy(false);
+          setActiveRoomCode("");
+          clearRoomSession();
           toast({ title: "Sala cheia", description: `O código ${msg.code} já tem dois jogadores.`, variant: "destructive" });
           break;
         case "ROOM_NOT_FOUND":
           setBusy(false);
+          setActiveRoomCode("");
+          clearRoomSession();
+          if (initialRoomCode === msg.code) {
+            setLocation(ROOM_PATH);
+          }
           toast({ title: "Sala não encontrada", description: `Nenhuma sala com o código ${msg.code}.`, variant: "destructive" });
           break;
         case "ERROR":
@@ -212,7 +239,17 @@ export default function RoomPage() {
     return () => {
       off();
     };
-  }, [isArena, matchInfo?.yourSide, onMessage, toast, user?.username]);
+  }, [initialRoomCode, matchInfo?.yourSide, onMessage, setLocation, toast, user?.username]);
+
+  useEffect(() => {
+    if (autoJoinSent.current) return;
+    if (!connected || !initialRoomCode) return;
+    autoJoinSent.current = true;
+    setRoomCode(initialRoomCode);
+    setStatus("joining");
+    setBusy(true);
+    send({ type: "JOIN_ROOM", code: initialRoomCode });
+  }, [connected, initialRoomCode, send]);
 
   useEffect(() => {
     if (!opponentOffline) return undefined;
@@ -226,16 +263,18 @@ export default function RoomPage() {
   const sortedMessages = useMemo(() => messages, [messages]);
 
   const handleCreateRoom = () => {
+    if (roomViewActive) return;
     if (!connected) {
       toast({ title: "Sem conexão", description: "Conecta ao servidor primeiro.", variant: "destructive" });
       return;
     }
     setBusy(true);
     setStatus("creating");
-    send({ type: "CREATE_ROOM", mode: gameMode });
+    send({ type: "CREATE_ROOM", mode: "1v1" });
   };
 
   const handleJoinRoom = () => {
+    if (roomViewActive) return;
     const code = roomCode.trim().toUpperCase();
     if (!code) {
       toast({ title: "Código necessário", description: "Introduz o código da sala.", variant: "destructive" });
@@ -251,9 +290,9 @@ export default function RoomPage() {
   };
 
   const handleCopyCode = async () => {
-    if (!roomState?.code) return;
-    await navigator.clipboard.writeText(roomState.code);
-    toast({ title: "Código copiado", description: roomState.code });
+    if (!roomViewCode) return;
+    await navigator.clipboard.writeText(roomViewCode);
+    toast({ title: "Código copiado", description: roomViewCode });
   };
 
   const handleSendChat = () => {
@@ -266,6 +305,8 @@ export default function RoomPage() {
   const handleLeaveRoom = () => {
     send({ type: "LEAVE_ROOM" });
     setRoomState(null);
+    setActiveRoomCode("");
+    clearRoomSession();
     setMatchInfo(null);
     setMessages([]);
     setDraft("");
@@ -276,6 +317,7 @@ export default function RoomPage() {
     setArenaState("MATCH_FOUND");
     setStatus("idle");
     setChatOpen(false);
+    setLocation(ROOM_PATH);
   };
 
   const handleSelect = (elemental: Elemental) => {
@@ -608,7 +650,7 @@ export default function RoomPage() {
         </Button>
       </div>
 
-      {!isArena ? (
+      {!roomViewActive ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="bg-card/60 border-primary/20 backdrop-blur">
             <CardHeader>
@@ -684,14 +726,14 @@ export default function RoomPage() {
             <div>
               <p className="text-xs font-mono uppercase text-muted-foreground">Sala</p>
               <div className="flex items-center gap-3">
-                <p className="text-2xl font-black tracking-[0.35em] text-secondary">{roomState?.code}</p>
+                <p className="text-2xl font-black tracking-[0.35em] text-secondary">{roomState?.code ?? roomViewCode}</p>
                 <Button variant="outline" size="sm" onClick={handleCopyCode} className="uppercase tracking-widest font-bold">
                   <Copy className="w-4 h-4 mr-2" /> Copiar
                 </Button>
               </div>
             </div>
             <div className="text-sm font-mono text-muted-foreground text-right">
-              <p>{roomState?.hostUsername} vs {roomState?.guestUsername ?? "..."}</p>
+              <p>{roomState?.hostUsername ?? "A sincronizar..."} vs {roomState?.guestUsername ?? "..."}</p>
               <p>{canChat ? "Chat ativo" : "Aguardando segundo jogador"}</p>
             </div>
           </div>

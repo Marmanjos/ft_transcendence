@@ -9,9 +9,9 @@ export type ServerMsg =
   | { type: "REMATCH_OFFERED" }
   | { type: "REMATCH_WAITING" }
   | { type: "OPPONENT_DISCONNECTED" }
-  | { type: "ROOM_CREATED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
-  | { type: "ROOM_JOINED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
-  | { type: "ROOM_UPDATED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_CREATED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_JOINED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_UPDATED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
   | { type: "ROOM_CHAT"; code: string; id: string; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ROOM_PLAYER_LEFT"; code: string; username: string }
   | { type: "ROOM_CLOSED"; code: string; reason: "host_left" | "closed" }
@@ -32,7 +32,7 @@ export type ClientMsg =
   | { type: "LEAVE_QUEUE" }
   | { type: "SUBMIT_CHOICE"; matchId: number; elemental: string }
   | { type: "OFFER_REMATCH"; matchId: number }
-  | { type: "CREATE_ROOM" }
+  | { type: "CREATE_ROOM"; mode?: "1v1" | "3v3" }
   | { type: "JOIN_ROOM"; code: string }
   | { type: "LEAVE_ROOM" }
   | { type: "SEND_ROOM_CHAT"; text: string }

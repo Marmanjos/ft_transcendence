@@ -10,6 +10,13 @@ export interface MatchPlayer {
   score: number;
 }
 
+export interface RoundResult {
+  round: number;
+  choices: [string, string, string];
+  outcomes: ["WIN" | "LOSS" | "DRAW", "WIN" | "LOSS" | "DRAW", "WIN" | "LOSS" | "DRAW"];
+  scores: [number, number, number];
+}
+
 export interface Match {
   id: string; // unique match instance ID
   code: string; // room code (e.g., "ABC123")
@@ -22,6 +29,13 @@ export interface Match {
   updatedAt: number;
   expiresAt: number; // 5 minutes from creation/last-activity
 }
+
+type MatchUpdateMessage =
+  | { type: "PLAYER_JOINED"; match: Match }
+  | { type: "PLAYER_SUBMIT"; match: Match; playerId: string }
+  | { type: "MATCH_START"; match: Match }
+  | { type: "ROUND_RESOLVED"; match: Match; roundResult: RoundResult }
+  | { type: "MATCH_FINISHED"; match: Match };
 
 const MATCH_TTL = 5 * 60 * 1000; // 5 minutes
 const MATCH_PREFIX = "3v3_match_";
@@ -63,7 +77,7 @@ export const MatchManager = {
         match.updatedAt = Date.now();
         match.expiresAt = Date.now() + MATCH_TTL;
         this.saveMatch(match);
-        this.broadcastMatchUpdate(match, "PLAYER_JOINED");
+        this.broadcastMatchUpdate({ type: "PLAYER_JOINED", match });
       }
       return match;
     }
@@ -132,7 +146,7 @@ export const MatchManager = {
       match.updatedAt = Date.now();
       match.expiresAt = Date.now() + MATCH_TTL;
       this.saveMatch(match);
-      this.broadcastMatchUpdate(match, "PLAYER_SUBMIT");
+      this.broadcastMatchUpdate({ type: "PLAYER_SUBMIT", match, playerId });
     }
   },
 
@@ -146,23 +160,28 @@ export const MatchManager = {
   /**
    * Get round results and update scores
    */
-  resolveRound(match: Match): Match {
-    const choices = match.players.map((p) => p.choice).filter((c) => c !== null);
-    if (choices.length !== 3) return match;
+  resolveRound(match: Match): { match: Match; roundResult: RoundResult } | null {
+    const currentRound = match.round;
+    const players = match.players.slice(0, 3);
+    const choices = players.map((p) => p.choice);
+    if (choices.length !== 3 || choices.some((choice): choice is null => choice === null)) return null;
 
     // Compute outcomes
-    const outcomes = this.getOutcomes(
-      choices[0] as string,
-      choices[1] as string,
-      choices[2] as string
-    );
+    const outcomes = this.getOutcomes(choices[0], choices[1], choices[2]);
 
     // Update scores
-    match.players.forEach((p, idx) => {
+    players.forEach((p, idx) => {
       if (outcomes[idx] === "WIN") {
         p.score += 1;
       }
     });
+
+    const roundResult: RoundResult = {
+      round: currentRound,
+      choices: [choices[0], choices[1], choices[2]],
+      outcomes: [outcomes[0], outcomes[1], outcomes[2]],
+      scores: [players[0].score, players[1].score, players[2].score],
+    };
 
     // Reset choices and advance round
     match.players.forEach((p) => {
@@ -172,7 +191,8 @@ export const MatchManager = {
     match.updatedAt = Date.now();
     match.expiresAt = Date.now() + MATCH_TTL;
     this.saveMatch(match);
-    return match;
+    this.broadcastMatchUpdate({ type: "ROUND_RESOLVED", match, roundResult });
+    return { match, roundResult };
   },
 
   /**
@@ -183,7 +203,7 @@ export const MatchManager = {
     if (!match) return;
     match.state = "finished";
     this.saveMatch(match);
-    this.broadcastMatchUpdate(match, "MATCH_FINISHED");
+    this.broadcastMatchUpdate({ type: "MATCH_FINISHED", match });
   },
 
   /**
@@ -207,10 +227,10 @@ export const MatchManager = {
   /**
    * Broadcast match update via BroadcastChannel
    */
-  broadcastMatchUpdate(match: Match, type: string): void {
+  broadcastMatchUpdate(message: MatchUpdateMessage): void {
     try {
-      const ch = new BroadcastChannel(`3v3_match_${match.code}`);
-      ch.postMessage({ type, match });
+      const ch = new BroadcastChannel(`3v3_match_${message.match.code}`);
+      ch.postMessage(message);
       ch.close();
     } catch (e) {}
   },

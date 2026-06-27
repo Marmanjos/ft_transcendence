@@ -8,13 +8,9 @@ import { ElementalAvatar } from "@/components/elemental-avatar";
 import { ArenaBackground } from "@/components/arena-background";
 import { Pause } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { MatchManager, type Match } from "@/lib/match-manager";
+import { MatchManager, type Match, type RoundResult } from "@/lib/match-manager";
 
 type ArenaState = "SELECTING" | "WAITING" | "ROUND_RESULT" | "MATCH_OVER";
-
-interface RoundResult {
-  outcomes: ("WIN" | "LOSS" | "DRAW")[];
-}
 
 const ELEMENTALS = [Elemental.TITAN, Elemental.RAZOR, Elemental.WRAITH];
 
@@ -57,11 +53,16 @@ export default function Game3v3Arena() {
       const msg = ev.data;
       if (!msg || !msg.type) return;
 
-      if (msg.type === "PLAYER_JOINED" || msg.type === "PLAYER_SUBMIT" || msg.type === "MATCH_START") {
+      if (msg.type === "PLAYER_JOINED" || msg.type === "PLAYER_SUBMIT" || msg.type === "MATCH_START" || msg.type === "ROUND_RESOLVED") {
         // Reload match from localStorage
-        const updated = MatchManager.getMatch(matchId);
+        const updated = msg.match ?? MatchManager.getMatch(matchId);
         if (updated) {
           setMatch(updated);
+          if (msg.type === "ROUND_RESOLVED") {
+            setRoundResult(msg.roundResult);
+            setArenaState("ROUND_RESULT");
+            setYourChoice(null);
+          }
         }
       }
 
@@ -110,20 +111,14 @@ export default function Game3v3Arena() {
     resolvingRef.current = true;
 
     // Resolve the round
-    const updatedMatch = MatchManager.resolveRound(currentMatch);
-    setMatch(updatedMatch);
-
-    // Calculate outcomes for display
-    const choices = updatedMatch.players.map((p) => p.choice);
-    if (choices.length === 3 && choices.every((c) => c !== null)) {
-      const outcomes = MatchManager.getOutcomes(
-        choices[0] as string,
-        choices[1] as string,
-        choices[2] as string
-      );
-      setRoundResult({ outcomes });
+    const resolved = MatchManager.resolveRound(currentMatch);
+    if (!resolved) {
+      resolvingRef.current = false;
+      return;
     }
 
+    setMatch(resolved.match);
+    setRoundResult(resolved.roundResult);
     setArenaState("ROUND_RESULT");
     setYourChoice(null);
     resolvingRef.current = false;
@@ -168,9 +163,17 @@ export default function Game3v3Arena() {
 
   // Get player positions: current user in center, others on sides
   const currentPlayerIdx = match.players.findIndex((p) => p.id === username);
-  const centerPlayer = match.players[currentPlayerIdx] ?? match.players[0];
-  const leftPlayer = match.players[currentPlayerIdx === 0 ? 1 : 0];
-  const rightPlayer = match.players[currentPlayerIdx === 2 ? 1 : 2];
+  const normalizedPlayerIdx = currentPlayerIdx >= 0 ? currentPlayerIdx : 0;
+  const centerPlayer = match.players[normalizedPlayerIdx] ?? match.players[0];
+  const leftPlayer = match.players[normalizedPlayerIdx === 0 ? 1 : 0];
+  const rightPlayer = match.players[normalizedPlayerIdx === 2 ? 1 : 2];
+  const leftChoice =
+    arenaState === "ROUND_RESULT" && roundResult ? roundResult.choices[normalizedPlayerIdx === 0 ? 1 : 0] : leftPlayer?.choice;
+  const rightChoice =
+    arenaState === "ROUND_RESULT" && roundResult ? roundResult.choices[normalizedPlayerIdx === 2 ? 1 : 2] : rightPlayer?.choice;
+  const centerChoice =
+    arenaState === "ROUND_RESULT" && roundResult ? roundResult.choices[normalizedPlayerIdx] : yourChoice;
+  const centerOutcome = arenaState === "ROUND_RESULT" && roundResult ? roundResult.outcomes[normalizedPlayerIdx] : null;
 
   const centerScore = centerPlayer?.score ?? 0;
   const leftScore = leftPlayer?.score ?? 0;
@@ -230,9 +233,9 @@ export default function Game3v3Arena() {
           <div className="flex-1 flex items-end justify-between px-8 md:px-12 pb-4 pt-24 relative">
             {/* Left Player */}
             <div className="flex flex-col items-center gap-2">
-              {leftPlayer?.choice && (
+              {leftChoice && (
                 <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                  <ElementalAvatar elemental={leftPlayer.choice as Elemental} side="left" size={120} />
+                  <ElementalAvatar elemental={leftChoice as Elemental} side="left" size={120} />
                 </motion.div>
               )}
               <p className="font-mono text-red-300 text-xs uppercase tracking-widest truncate max-w-[120px]">
@@ -242,9 +245,9 @@ export default function Game3v3Arena() {
 
             {/* Center - YOU */}
             <div className="flex flex-col items-center gap-2">
-              {yourChoice ? (
+              {centerChoice ? (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <ElementalAvatar elemental={yourChoice} side="left" size={150} />
+                  <ElementalAvatar elemental={centerChoice as Elemental} side="left" size={150} />
                 </motion.div>
               ) : (
                 <div style={{ width: 150, height: 218 }} className="flex items-center justify-center">
@@ -262,9 +265,9 @@ export default function Game3v3Arena() {
 
             {/* Right Player */}
             <div className="flex flex-col items-center gap-2">
-              {rightPlayer?.choice && (
+              {rightChoice && (
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                  <ElementalAvatar elemental={rightPlayer.choice as Elemental} side="right" size={120} />
+                  <ElementalAvatar elemental={rightChoice as Elemental} side="right" size={120} />
                 </motion.div>
               )}
               <p className="font-mono text-red-300 text-xs uppercase tracking-widest truncate max-w-[120px]">
@@ -285,22 +288,19 @@ export default function Game3v3Arena() {
                   <div className="text-center">
                     <p
                       className={`px-6 py-3 border-4 font-black text-2xl uppercase tracking-widest ${
-                        roundResult.outcomes[currentPlayerIdx] === "WIN"
+                        centerOutcome === "WIN"
                           ? "border-red-400 text-red-300"
-                          : roundResult.outcomes[currentPlayerIdx] === "LOSS"
+                          : centerOutcome === "LOSS"
                           ? "border-white/30 text-white/30"
                           : "border-white/50 text-white/50"
                       }`}
                       style={{
-                        boxShadow:
-                          roundResult.outcomes[currentPlayerIdx] === "WIN"
-                            ? "0 0 30px rgba(255,100,100,0.4)"
-                            : "none",
+                        boxShadow: centerOutcome === "WIN" ? "0 0 30px rgba(255,100,100,0.4)" : "none",
                       }}
                     >
-                      {roundResult.outcomes[currentPlayerIdx] === "WIN"
+                      {centerOutcome === "WIN"
                         ? "VITÓRIA"
-                        : roundResult.outcomes[currentPlayerIdx] === "LOSS"
+                        : centerOutcome === "LOSS"
                         ? "DERROTA"
                         : "EMPATE"}
                     </p>

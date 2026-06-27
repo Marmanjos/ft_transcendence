@@ -94,7 +94,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout, token } = useAuth();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  const { send, onMessage } = useWs(token);
+  const { onMessage } = useWs(token);
 
   // Apenas GAME_INVITE_RECEIVED continua como toast puro (não persiste)
   useEffect(() => {
@@ -108,8 +108,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Button
               size="sm"
               onClick={() => {
-                send({ type: "JOIN_ROOM", code: msg.roomCode });
-                setLocation("/room");
+                setLocation(`/room?code=${encodeURIComponent(msg.roomCode)}`);
               }}
               className="bg-primary hover:bg-primary/80 font-bold uppercase tracking-wider text-xs h-8 px-3 text-white"
             >
@@ -169,6 +168,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Button variant="ghost" size="icon" onClick={logout} title="Desconectar">
               <LogOut className="h-5 w-5 text-destructive" />
             </Button>
+            <div className="rounded-full border border-red-500/30 bg-black/70 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.28em] text-red-300">
+              build {BUILD_TAG}
+            </div>
           </div>
         </div>
       </header>
