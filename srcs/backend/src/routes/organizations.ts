@@ -880,10 +880,26 @@ router.post("/organizations/:id/messages", requireAuth, async (req, res): Promis
       )
     );
 
+  const [org] = await db
+  .select({ name: organizationsTable.name })
+  .from(organizationsTable)
+  .where(eq(organizationsTable.id, organizationId))
+  .limit(1);
+
   broadcastToUsers(
     acceptedMembers.map((m) => m.userId),
     { type: "ORG_MESSAGE", organizationId, ...payload }
   );
+
+  for (const m of acceptedMembers) {
+    if (m.userId === userId) continue; // não notifica o remetente
+    await createNotification(m.userId, "ORG_MESSAGE", {
+      organizationId,
+      organizationName: org?.name ?? "um grupo",
+      senderUsername: req.user!.username,
+      preview: text.slice(0, 60),
+    });
+  }
 
   res.status(201).json(payload);
 });
