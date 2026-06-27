@@ -18,6 +18,7 @@ import Lobby from "@/pages/lobby";
 import Room from "@/pages/room";
 import Game from "@/pages/game";
 import Game3v3 from "@/pages/game-3v3";
+import Game3v3Arena from "@/pages/game-3v3-arena";
 import GameMulti from "@/pages/game-multi";
 import History from "@/pages/history";
 import Leaderboard from "@/pages/leaderboard";
@@ -43,6 +44,9 @@ function Router() {
         </Route>
         <Route path="/game/3v3">
           <ProtectedRoute><Game3v3 /></ProtectedRoute>
+        </Route>
+        <Route path="/game/3v3/arena">
+          <ProtectedRoute><Game3v3Arena /></ProtectedRoute>
         </Route>
         <Route path="/game/multi">
           <ProtectedRoute><GameMulti /></ProtectedRoute>
