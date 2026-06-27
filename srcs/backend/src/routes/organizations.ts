@@ -1,4 +1,3 @@
-import { createNotification } from "../lib/notifications.js";
 import { Router, type IRouter, type Response } from "express";
 import { and, desc, eq, ilike, inArray, notInArray } from "drizzle-orm";
 import {
@@ -719,16 +718,10 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
     .values({ organizationId, userId: user.id, role, status: "PENDING" })
     .returning();
 
-  const [org] = await db
-    .select({ name: organizationsTable.name })
-    .from(organizationsTable)
-    .where(eq(organizationsTable.id, organizationId))
-    .limit(1);
-
-  await createNotification(user.id, "ORG_INVITE", {
-    organizationId,
-    organizationName: org?.name ?? "um grupo",
-  });
+  broadcastToUsers(
+    [user.id],
+    { type: "ORG_INVITE_RECEIVED", organizationId }
+  );
 
   res.status(201).json({
     id: member.id,
@@ -881,27 +874,11 @@ router.post("/organizations/:id/messages", requireAuth, async (req, res): Promis
       )
     );
 
-  const onlineUserIds: number[] = [];
-  const offlineUserIds: number[] = [];
+  broadcastToUsers(
+    acceptedMembers.map((m) => m.userId),
+    { type: "ORG_MESSAGE", organizationId, ...payload }
+  );
 
-  for (const m of acceptedMembers) {
-    if (m.userId === userId) continue; // não notifica o próprio remetente
-    if (isUserOnline(m.userId)) {
-      onlineUserIds.push(m.userId);
-    } else {
-      offlineUserIds.push(m.userId);
-    }
-  }
-
-  broadcastToUsers(onlineUserIds, { type: "ORG_MESSAGE", organizationId, ...payload });
-  for (const offlineId of offlineUserIds) {
-    await createNotification(offlineId, "ORG_MESSAGE", {
-      organizationId,
-      organizationName: group?.name ?? "um grupo",
-      senderUsername: req.user!.username,
-      preview: text.slice(0, 60),
-    });
-  }
   res.status(201).json(payload);
 });
 
