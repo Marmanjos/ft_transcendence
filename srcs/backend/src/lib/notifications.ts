@@ -6,7 +6,9 @@ export type NotifType =
   | "FRIEND_REQUEST"
   | "FRIEND_ACCEPTED"
   | "FRIEND_REMOVED"
-  | "GAME_INVITE";
+  | "GAME_INVITE"
+  | "ORG_INVITE"
+  | "ORG_MESSAGE";
 
 export async function createNotification(
   userId: number,
