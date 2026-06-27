@@ -32,7 +32,8 @@ type ServerMsg =
   | { type: "ORG_MESSAGE"; organizationId: number; id: number; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ERROR"; message: string }
   | { type: "PONG" }
-  | { type: "NOTIFICATION"; id: number; notifType: string; payload: unknown; createdAt: string };
+  | { type: "NOTIFICATION"; id: number; notifType: string; payload: unknown; createdAt: string }
+  | { type: "ORG_INVITE_RECEIVED"; organizationId: number; organizationName: string };
 
 type ClientMsg =
   | { type: "JOIN_QUEUE" }
@@ -119,6 +120,11 @@ export function broadcastToUsers(userIds: number[], msg: ServerMsg) {
       }
     }
   }
+}
+
+export function isUserOnline(userId: number): boolean {
+  const sockets = userSockets.get(userId);
+  return !!sockets && sockets.size > 0;
 }
 
 function updatePlayerSocket(userId: number, newWs: WebSocket) {
