@@ -1,3 +1,4 @@
+import { createNotification } from "../lib/notifications.js";
 import { Router, type IRouter, type Response } from "express";
 import { and, desc, eq, ilike, inArray, notInArray } from "drizzle-orm";
 import {
@@ -722,6 +723,11 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
     [user.id],
     { type: "ORG_INVITE_RECEIVED", organizationId }
   );
+
+  await createNotification(user.id, "ORG_INVITE", {
+    organizationId,
+    organizationName: organizationMembersTable?.name ?? "um grupo",
+  });
 
   res.status(201).json({
     id: member.id,
