@@ -23,6 +23,10 @@ function NotificationBell() {
     markRead(notif.id);
     if (notif.type === "FRIEND_REQUEST" || notif.type === "FRIEND_ACCEPTED") {
       setLocation("/friends");
+    } else if (notif.type === "ORG_INVITE") {
+      setLocation("/groups");
+    } else if (notif.type === "ORG_MESSAGE") {
+      setLocation(`/groups/${notif.payload.organizationId}`);
     }
   };
 
