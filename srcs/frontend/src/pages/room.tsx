@@ -68,6 +68,8 @@ export default function RoomPage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [opponentOffline, setOpponentOffline] = useState(false);
   const [offlineCountdown, setOfflineCountdown] = useState(8);
+  const [gameMode, setGameMode] = useState<"CLASSIC" | "HYPER">("CLASSIC");
+  const [roomSize, setRoomSize] = useState<"1v1" | "3v3">("1v1");
 
   const isArena = Boolean(matchInfo);
   const canChat = Boolean(roomState?.canChat);
@@ -230,7 +232,7 @@ export default function RoomPage() {
     }
     setBusy(true);
     setStatus("creating");
-    send({ type: "CREATE_ROOM" });
+    send({ type: "CREATE_ROOM", mode: gameMode });
   };
 
   const handleJoinRoom = () => {
@@ -583,7 +585,14 @@ export default function RoomPage() {
       </div>
     );
   };
-
+  // Early return for 3v3 mode
+  if (roomSize === "3v3") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black text-white">
+        <h1 className="text-4xl font-bold">Coming Soon</h1>
+      </div>
+    );
+  }
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -596,6 +605,9 @@ export default function RoomPage() {
         </div>
         <Button variant="outline" onClick={() => setLocation("/lobby")} className="w-fit uppercase tracking-widest font-bold">
           <ArrowLeft className="w-4 h-4 mr-2" /> Lobby
+        </Button>
+        <Button onClick={() => setRoomSize(prev => prev === "1v1" ? "3v3" : "1v1")} className="ml-2 uppercase tracking-widest font-bold">
+          {roomSize === "1v1" ? "Switch to 3v3" : "Switch to 1v1"}
         </Button>
       </div>
 
