@@ -17,6 +17,7 @@ import Register from "@/pages/register";
 import Lobby from "@/pages/lobby";
 import Room from "@/pages/room";
 import Game from "@/pages/game";
+import Game3v3 from "@/pages/game-3v3";
 import GameMulti from "@/pages/game-multi";
 import History from "@/pages/history";
 import Leaderboard from "@/pages/leaderboard";
@@ -40,11 +41,14 @@ function Router() {
         <Route path="/lobby">
           <ProtectedRoute><Lobby /></ProtectedRoute>
         </Route>
-        <Route path="/game">
-          <ProtectedRoute><Game /></ProtectedRoute>
+        <Route path="/game/3v3">
+          <ProtectedRoute><Game3v3 /></ProtectedRoute>
         </Route>
         <Route path="/game/multi">
           <ProtectedRoute><GameMulti /></ProtectedRoute>
+        </Route>
+        <Route path="/game">
+          <ProtectedRoute><Game /></ProtectedRoute>
         </Route>
         <Route path="/room">
           <ProtectedRoute><Room /></ProtectedRoute>

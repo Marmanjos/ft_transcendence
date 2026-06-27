@@ -606,9 +606,6 @@ export default function RoomPage() {
         <Button variant="outline" onClick={() => setLocation("/lobby")} className="w-fit uppercase tracking-widest font-bold">
           <ArrowLeft className="w-4 h-4 mr-2" /> Lobby
         </Button>
-        <Button onClick={() => setRoomSize(prev => prev === "1v1" ? "3v3" : "1v1")} className="ml-2 uppercase tracking-widest font-bold">
-          {roomSize === "1v1" ? "Switch to 3v3" : "Switch to 1v1"}
-        </Button>
       </div>
 
       {!isArena ? (
