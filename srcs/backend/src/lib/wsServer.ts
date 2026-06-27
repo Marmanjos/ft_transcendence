@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { verifyToken } from "./auth.js";
 import { resolveRound, type Elemental } from "./gameEngine.js";
 import { logger } from "./logger.js";
+import { getUnreadNotifications } from "./notifications.js";
 
 type ServerMsg =
   | { type: "QUEUE_JOINED" }
@@ -142,7 +143,17 @@ function updatePlayerSocket(userId: number, newWs: WebSocket) {
   }
 }
 
-function restoreClientState(userId: number, username: string) {
+async function restoreClientState(userId: number, username: string) {
+  const pending = await getUnreadNotifications(userId);
+  for (const n of pending) {
+    sendToUser(userId, {
+      type: "NOTIFICATION",
+      id: n.id,
+      notifType: n.type,
+      payload: n.payload,
+      createdAt: n.createdAt.toISOString(),
+    });
+  }
   // 1. Check if they are in an active matchmaking game
   const foundMatch = getRoomForPlayer(userId);
   if (foundMatch) {
