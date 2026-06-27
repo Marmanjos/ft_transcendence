@@ -122,9 +122,11 @@ export function broadcastToUsers(userIds: number[], msg: ServerMsg) {
   }
 }
 
-export function isUserOnline(userId: number): boolean {
-  const sockets = userSockets.get(userId);
-  return !!sockets && sockets.size > 0;
+export function getOnlineUserIds(userIds: number[]): number[] {
+  return userIds.filter(id => {
+    const sockets = userSockets.get(id);
+    return !!sockets && sockets.size > 0;
+  });
 }
 
 function updatePlayerSocket(userId: number, newWs: WebSocket) {
