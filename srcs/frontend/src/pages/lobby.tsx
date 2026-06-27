@@ -84,8 +84,17 @@ export default function Lobby() {
             onClick={() => setLocation("/room")}
             className="h-14 px-6 text-base font-bold uppercase tracking-widest border-secondary/50 text-secondary hover:bg-secondary/10 hover:border-secondary w-full sm:w-auto"
           >
-            <Globe className="w-5 h-5 mr-2" />
-            Salas Online
+            <Swords className="w-5 h-5 mr-2" />
+            1v1 PvP
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={() => setLocation("/game/3v3")}
+            className="h-14 px-6 text-base font-bold uppercase tracking-widest border-destructive/50 text-destructive hover:bg-destructive/10 hover:border-destructive w-full sm:w-auto"
+          >
+            <Swords className="w-5 h-5 mr-2" />
+            3v3 PvP
           </Button>
         </div>
       </div>
