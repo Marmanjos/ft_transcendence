@@ -14,16 +14,21 @@ const TOAST_TITLE: Record<string, string> = {
   FRIEND_REQUEST:  "Solicitação de Amizade! 🤝",
   FRIEND_ACCEPTED: "Pedido Aceito! 🎉",
   FRIEND_REMOVED:  "Amigo removido",
+  ORG_INVITE:   "Convite para Grupo! 👥",
+  ORG_MESSAGE:  "Nova mensagem no grupo 💬",
 };
 
-const TOAST_DESC = (type: string, fromUsername?: string): string => {
+const TOAST_DESC = (type: string, fromUsername?: string, payload?: Record<string, unknown>): string => {
   const name = fromUsername || "Alguém";
+  const orgName = payload?.organizationName as string | undefined;
+
   if (type === "FRIEND_REQUEST")  return `${name} enviou-te um pedido de amizade.`;
   if (type === "FRIEND_ACCEPTED") return `Agora você e ${name} são amigos.`;
   if (type === "FRIEND_REMOVED")  return `${name} te removeu dos amigos.`;
+  if (type === "ORG_INVITE")      return `Você foi convidado para "${orgName ?? "um grupo"}".`;
+  if (type === "ORG_MESSAGE")     return `${name} enviou uma mensagem em "${orgName ?? "um grupo"}".`;
   return "";
 };
-
 export function useNotifications() {
   const { token } = useAuth();
   const { onMessage } = useWs(token);
@@ -56,7 +61,8 @@ export function useNotifications() {
 
       const fromUsername = (msg.payload as any)?.fromUsername as string | undefined;
       const title = TOAST_TITLE[msg.notifType];
-      const description = TOAST_DESC(msg.notifType, fromUsername);
+      const description = TOAST_DESC(msg.notifType, fromUsername, msg.payload as Record<string, unknown>);
+
       if (title) {
         toast({ title, description });
       }
