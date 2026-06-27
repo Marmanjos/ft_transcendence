@@ -17,6 +17,6 @@ router.use(matchesRouter);
 router.use(leaderboardRouter);
 router.use(friendsRouter);
 router.use(organizationsRouter);
-router.use("/api", notificationsRouter);
+router.use(notificationsRouter);
 
 export default router;
