@@ -4,6 +4,7 @@ import { eq, or, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { AddFriendBody, AcceptFriendParams, RemoveFriendParams } from "@workspace/api-zod";
 import { sendToUser } from "../lib/wsServer.js";
+import { createNotification } from "../lib/notifications.js";
 
 const router: IRouter = Router();
 
@@ -153,11 +154,7 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
         .where(eq(friendshipsTable.id, existing.id))
         .returning();
 
-      sendToUser(targetUserId, {
-        type: "FRIEND_UPDATE",
-        reason: "REQUEST_ACCEPTED",
-        fromUsername: currentUser.username,
-      });
+      await createNotification(targetUserId, "FRIEND_ACCEPTED", { fromUsername: currentUser.username });
 
       res.status(201).json({
         id: updated.id,
@@ -183,11 +180,7 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
       })
       .returning();
 
-    sendToUser(targetUserId, {
-      type: "FRIEND_UPDATE",
-      reason: "REQUEST_RECEIVED",
-      fromUsername: currentUser.username,
-    });
+    await createNotification(targetUserId, "FRIEND_REQUEST", { fromUsername: currentUser.username });
 
     res.status(201).json({
       id: newFriendship.id,
@@ -254,11 +247,7 @@ router.post("/friends/:id/accept", requireAuth, async (req, res): Promise<void> 
       .where(eq(usersTable.id, currentUserId))
       .limit(1);
 
-    sendToUser(friendId, {
-      type: "FRIEND_UPDATE",
-      reason: "REQUEST_ACCEPTED",
-      fromUsername: currentUser?.username,
-    });
+    await createNotification(friendId, "FRIEND_ACCEPTED", { fromUsername: currentUser?.username ?? "Alguém" });
 
     res.json({
       id: updated.id,

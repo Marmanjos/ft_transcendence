@@ -30,7 +30,8 @@ type ServerMsg =
   | { type: "OPPONENT_RECONNECTED" }
   | { type: "ORG_MESSAGE"; organizationId: number; id: number; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ERROR"; message: string }
-  | { type: "PONG" };
+  | { type: "PONG" }
+  | { type: "NOTIFICATION"; id: number; notifType: string; payload: unknown; createdAt: string };
 
 type ClientMsg =
   | { type: "JOIN_QUEUE" }
