@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useWs, type ServerMsg } from "./use-ws";
 import { useAuth } from "./use-auth";
 import { useToast } from "./use-toast";
@@ -29,9 +29,11 @@ export function useNotifications() {
   const { onMessage } = useWs(token);
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const loaded = useRef(false); // Fix 2: só carrega uma vez por sessão
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || loaded.current) return;
+    loaded.current = true;
     fetch("/api/notifications", {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -44,13 +46,14 @@ export function useNotifications() {
     const off = onMessage((msg: ServerMsg) => {
       if (msg.type !== "NOTIFICATION") return;
 
-      // Adiciona ao painel
-      setNotifications(prev => [
-        { id: msg.id, type: msg.notifType, payload: msg.payload as Record<string, unknown>, createdAt: msg.createdAt },
-        ...prev,
-      ]);
+      setNotifications(prev => {
+        if (prev.some(n => n.id === msg.id)) return prev; // Fix 1: deduplicar
+        return [
+          { id: msg.id, type: msg.notifType, payload: msg.payload as Record<string, unknown>, createdAt: msg.createdAt },
+          ...prev,
+        ];
+      });
 
-      // Dispara toast em tempo real
       const fromUsername = (msg.payload as any)?.fromUsername as string | undefined;
       const title = TOAST_TITLE[msg.notifType];
       const description = TOAST_DESC(msg.notifType, fromUsername);
