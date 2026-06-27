@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, History, Trophy, User, Users, UsersRound } from "lucide-react";
+import { LogOut, Home, History, Trophy, User, Users, UsersRound, Bell } from "lucide-react";
 import { useEffect } from "react";
 import { useWs } from "@/hooks/use-ws";
 import { useToast } from "@/hooks/use-toast";
@@ -100,6 +100,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Link href="/friends" className={`text-sm font-medium transition-colors hover:text-primary ${location === "/friends" ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><Users className="w-4 h-4" /> Amigos</span>
             </Link>
+            <span className="flex items-center gap-2"><Bell className="w-4 h-4" /> Notificações</span>
           </nav>
 
           <div className="flex items-center gap-4">
