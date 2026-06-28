@@ -61,6 +61,12 @@ export default function RoomPage() {
   const initialRoomCode = initialCode || (persistedRoom?.path === ROOM_PATH ? persistedRoom.code : "");
   const autoJoinSent = useRef(false);
 
+  useEffect(() => {
+    if (persistedRoom && persistedRoom.path !== ROOM_PATH) {
+      setLocation(`${persistedRoom.path}?code=${encodeURIComponent(persistedRoom.code)}`);
+    }
+  }, [persistedRoom, setLocation]);
+
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [activeRoomCode, setActiveRoomCode] = useState(initialRoomCode);
   const [roomCode, setRoomCode] = useState(initialCode);

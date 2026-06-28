@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useWs, type ServerMsg } from "@/hooks/use-ws";
+import { loadRoomSession } from "@/lib/room-session";
 
 interface RoomState {
   code: string;
@@ -26,11 +27,20 @@ export default function Game3v3() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<"idle" | "creating" | "joining">("idle");
 
+  const persistedRoom = loadRoomSession();
+  useEffect(() => {
+    if (persistedRoom) {
+      setLocation(`${persistedRoom.path}?code=${encodeURIComponent(persistedRoom.code)}`);
+    }
+  }, [persistedRoom, setLocation]);
+
   useEffect(() => {
     const off = onMessage((msg: ServerMsg) => {
       switch (msg.type) {
         case "ROOM_CREATED":
         case "ROOM_JOINED":
+          setLocation(`/room/3v3?code=${encodeURIComponent(msg.code)}`);
+          break;
         case "ROOM_UPDATED":
           setRoomState({
             code: msg.code,

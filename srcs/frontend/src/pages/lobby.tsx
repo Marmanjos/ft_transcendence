@@ -1,16 +1,24 @@
 import { useLocation, Link } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGetArenaSummary, useListMatches, useGetLeaderboard, useCreateMatch } from "@workspace/api-client-react";
 import { MatchMode, MatchStatus } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Swords, Activity, Trophy, Bot, Globe, History } from "lucide-react";
+import { loadRoomSession } from "@/lib/room-session";
 
 export default function Lobby() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [difficulty, setDifficulty] = useState<"EASY" | "MEDIUM" | "HARD">("MEDIUM");
+  
+  const persistedRoom = loadRoomSession();
+  useEffect(() => {
+    if (persistedRoom) {
+      setLocation(`${persistedRoom.path}?code=${encodeURIComponent(persistedRoom.code)}`);
+    }
+  }, [persistedRoom, setLocation]);
   
   const { data: summary } = useGetArenaSummary();
   const { data: matches } = useListMatches({ limit: 5 });

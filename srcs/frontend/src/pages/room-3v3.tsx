@@ -38,6 +38,12 @@ export default function Room3v3Page() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<"idle" | "creating" | "joining">("idle");
 
+  useEffect(() => {
+    if (persistedRoom && persistedRoom.path !== ROOM_PATH) {
+      setLocation(`${persistedRoom.path}?code=${encodeURIComponent(persistedRoom.code)}`);
+    }
+  }, [persistedRoom, setLocation]);
+
   const actionLocked = roomState !== null || activeRoomCode !== "" || status !== "idle";
   const roomViewCode = roomState?.code ?? activeRoomCode;
   const roomViewActive = roomState !== null || activeRoomCode !== "";
@@ -61,6 +67,9 @@ export default function Room3v3Page() {
           saveRoomSession({ code: msg.code, path: ROOM_PATH });
           if (window.location.pathname !== ROOM_PATH || window.location.search !== `?code=${encodeURIComponent(msg.code)}`) {
             setLocation(`${ROOM_PATH}?code=${encodeURIComponent(msg.code)}`);
+          }
+          if (msg.matchId) {
+            setLocation(`/game/3v3/arena?matchId=${msg.matchId}`);
           }
           setBusy(false);
           setStatus("idle");

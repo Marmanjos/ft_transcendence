@@ -9,6 +9,8 @@ import { ArenaBackground } from "@/components/arena-background";
 import { Pause } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { MatchManager, type Match, type RoundResult } from "@/lib/match-manager";
+import { useWs } from "@/hooks/use-ws";
+import { useToast } from "@/hooks/use-toast";
 
 type ArenaState = "SELECTING" | "WAITING" | "ROUND_RESULT" | "MATCH_OVER";
 
@@ -19,12 +21,11 @@ export default function Game3v3Arena() {
   const searchParams = new URLSearchParams(window.location.search);
   const matchId = searchParams.get("matchId");
 
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const username = user?.username ?? `guest_${Math.random().toString(36).slice(2,6)}`;
 
-  const channelRef = useRef<BroadcastChannel | null>(null);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const resolvingRef = useRef(false);
+  const { toast } = useToast();
+  const { send, onMessage, connected } = useWs(token);
 
   const [arenaState, setArenaState] = useState<ArenaState>("SELECTING");
   const [match, setMatch] = useState<Match | null>(null);
@@ -32,67 +33,92 @@ export default function Game3v3Arena() {
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
   const [paused, setPaused] = useState(false);
 
-  // Initialize match and listeners
+  // Connect & Sync State
   useEffect(() => {
-    if (!matchId) return;
+    if (!matchId || !connected) return;
 
-    // Load initial match
-    const initialMatch = MatchManager.getMatch(matchId);
-    if (!initialMatch) {
-      alert("Partida não encontrada.");
-      setLocation("/game/3v3");
-      return;
-    }
-    setMatch(initialMatch);
+    // Send SYNC_MATCH message to fetch current state
+    send({ type: "SYNC_MATCH", matchId: Number(matchId) });
 
-    // Setup BroadcastChannel listener
-    const ch = new BroadcastChannel(`3v3_match_${initialMatch.code}`);
-    channelRef.current = ch;
+    const off = onMessage((msg) => {
+      switch (msg.type) {
+        case "MATCH_3V3_UPDATE": {
+          setMatch({
+            id: matchId,
+            code: "",
+            hostId: "",
+            hostUsername: "",
+            players: msg.players.map((p) => ({
+              id: p.username,
+              username: p.username,
+              choice: p.choice,
+              score: p.score,
+            })),
+            state: "playing",
+            round: msg.roundNumber,
+            createdAt: 0,
+            updatedAt: 0,
+            expiresAt: 0,
+          });
 
-    const handleMessage = (ev: MessageEvent) => {
-      const msg = ev.data;
-      if (!msg || !msg.type) return;
-
-      if (msg.type === "PLAYER_JOINED" || msg.type === "PLAYER_SUBMIT" || msg.type === "MATCH_START" || msg.type === "ROUND_RESOLVED") {
-        // Reload match from localStorage
-        const updated = msg.match ?? MatchManager.getMatch(matchId);
-        if (updated) {
-          setMatch(updated);
-          if (msg.type === "ROUND_RESOLVED") {
-            setRoundResult(msg.roundResult);
-            setArenaState("ROUND_RESULT");
+          // Check if self has already chosen in the current round
+          const me = msg.players.find((p) => p.username === username);
+          if (me && me.choice) {
+            setYourChoice(me.choice as Elemental);
+            setArenaState("WAITING");
+          } else {
             setYourChoice(null);
+            setArenaState("SELECTING");
           }
+          break;
         }
-      }
+        case "MATCH_3V3_ROUND_RESULT": {
+          setMatch((prev) => {
+            if (!prev) return null;
+            const updatedPlayers = prev.players.map((p) => ({
+              ...p,
+              choice: null,
+              score: msg.scores[p.username] ?? p.score,
+            }));
+            
+            // Build choices, outcomes, and scores matching the current players order
+            const choices = updatedPlayers.map((p) => msg.choices[p.username] ?? null) as [string, string, string];
+            const outcomes = updatedPlayers.map((p) => msg.outcomes[p.username] ?? "DRAW") as ["WIN" | "LOSS" | "DRAW", "WIN" | "LOSS" | "DRAW", "WIN" | "LOSS" | "DRAW"];
+            const scores = updatedPlayers.map((p) => msg.scores[p.username] ?? 0) as [number, number, number];
 
-      if (msg.type === "ROOM_CLOSED" || msg.type === "MATCH_FINISHED") {
-        setLocation("/game/3v3");
-      }
-    };
-
-    ch.addEventListener("message", handleMessage as any);
-
-    // Setup polling to check if all players are ready
-    pollIntervalRef.current = setInterval(() => {
-      const current = MatchManager.getMatch(matchId);
-      if (current) {
-        setMatch(current);
-        // If all players have submitted, try to resolve
-        if (arenaState === "WAITING" && MatchManager.allPlayersReady(current)) {
-          resolveRound(current);
+            setRoundResult({
+              round: msg.roundNumber,
+              choices,
+              outcomes,
+              scores,
+            });
+            return {
+              ...prev,
+              players: updatedPlayers,
+            };
+          });
+          setArenaState("ROUND_RESULT");
+          setYourChoice(null);
+          break;
         }
+        case "MATCH_3V3_OVER":
+          setArenaState("MATCH_OVER");
+          break;
+        case "OPPONENT_DISCONNECTED":
+          toast({ title: "Oponente desconectou", description: "A partida foi cancelada.", variant: "destructive" });
+          setLocation("/game/3v3");
+          break;
+        case "ROOM_CLOSED":
+          toast({ title: "Sala fechada", description: "O host fechou a sala.", variant: "destructive" });
+          setLocation("/game/3v3");
+          break;
       }
-    }, 500); // Poll every 500ms
+    });
 
     return () => {
-      ch.removeEventListener("message", handleMessage as any);
-      ch.close();
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
+      off();
     };
-  }, [matchId, arenaState, setLocation]);
+  }, [matchId, connected, onMessage, username, setLocation, toast]);
 
   const handleSelectElemental = (elemental: Elemental) => {
     if (arenaState !== "SELECTING" || !match) return;
@@ -100,58 +126,32 @@ export default function Game3v3Arena() {
     setYourChoice(elemental);
     setArenaState("WAITING");
 
-    // Submit choice to match
-    MatchManager.submitChoice(match.id, username, elemental);
-  };
-
-  const resolveRound = (currentMatch: Match) => {
-    if (resolvingRef.current) return;
-    if (!MatchManager.allPlayersReady(currentMatch)) return;
-
-    resolvingRef.current = true;
-
-    // Resolve the round
-    const resolved = MatchManager.resolveRound(currentMatch);
-    if (!resolved) {
-      resolvingRef.current = false;
-      return;
-    }
-
-    setMatch(resolved.match);
-    setRoundResult(resolved.roundResult);
-    setArenaState("ROUND_RESULT");
-    setYourChoice(null);
-    resolvingRef.current = false;
+    // Submit choice to server
+    send({ type: "SUBMIT_CHOICE", matchId: Number(matchId), elemental });
   };
 
   const handleNextRound = () => {
     if (!match) return;
 
-    if (match.round > 3) {
-      // Match over
-      MatchManager.finishMatch(match.id);
+    const nextRound = (roundResult?.round ?? match.round) + 1;
+    if (nextRound > 3) {
       setArenaState("MATCH_OVER");
       return;
     }
 
-    // Reset for next round
+    setMatch((prev) => prev ? { ...prev, round: nextRound } : null);
     setRoundResult(null);
     setArenaState("SELECTING");
     setYourChoice(null);
   };
 
   const handleRestart = () => {
-    if (!match) return;
-    // Create a new match
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newMatch = MatchManager.createMatch(code, username, username);
-    setMatch(newMatch);
-    setArenaState("SELECTING");
-    setYourChoice(null);
-    setRoundResult(null);
+    setLocation("/game/3v3");
   };
 
-  const handleMainMenu = () => setLocation("/game/3v3");
+  const handleMainMenu = () => {
+    setLocation("/game/3v3");
+  };
 
   if (!match) {
     return (
@@ -235,14 +235,20 @@ export default function Game3v3Arena() {
             <div className="flex flex-col items-center gap-2">
               {leftChoice && (
                 <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                  <ElementalAvatar elemental={leftChoice as Elemental} side="left" size={120} />
+                  {arenaState === "ROUND_RESULT" ? (
+                    <ElementalAvatar elemental={leftChoice as Elemental} side="left" size={120} />
+                  ) : (
+                    <div className="w-[120px] h-[174px] rounded-xl border-2 border-dashed border-red-500/40 bg-red-950/20 flex items-center justify-center">
+                      <span className="text-xs font-mono text-red-400 font-bold uppercase tracking-widest">Pronto</span>
+                    </div>
+                  )}
                 </motion.div>
               )}
               <p className="font-mono text-red-300 text-xs uppercase tracking-widest truncate max-w-[120px]">
                 {leftPlayer?.username}
               </p>
             </div>
-
+ 
             {/* Center - YOU */}
             <div className="flex flex-col items-center gap-2">
               {centerChoice ? (
@@ -262,12 +268,18 @@ export default function Game3v3Arena() {
                 {centerPlayer?.username}
               </p>
             </div>
-
+ 
             {/* Right Player */}
             <div className="flex flex-col items-center gap-2">
               {rightChoice && (
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                  <ElementalAvatar elemental={rightChoice as Elemental} side="right" size={120} />
+                  {arenaState === "ROUND_RESULT" ? (
+                    <ElementalAvatar elemental={rightChoice as Elemental} side="right" size={120} />
+                  ) : (
+                    <div className="w-[120px] h-[174px] rounded-xl border-2 border-dashed border-red-500/40 bg-red-950/20 flex items-center justify-center">
+                      <span className="text-xs font-mono text-red-400 font-bold uppercase tracking-widest">Pronto</span>
+                    </div>
+                  )}
                 </motion.div>
               )}
               <p className="font-mono text-red-300 text-xs uppercase tracking-widest truncate max-w-[120px]">

@@ -37,7 +37,8 @@ export type ClientMsg =
   | { type: "LEAVE_ROOM" }
   | { type: "SEND_ROOM_CHAT"; text: string }
   | { type: "INVITE_TO_PLAY"; targetUserId: number }
-  | { type: "PING" };
+  | { type: "PING" }
+  | { type: "SYNC_MATCH"; matchId: number };
 
 type MsgHandler = (msg: ServerMsg) => void;
 
