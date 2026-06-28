@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, matchesTable, roundsTable, usersTable } from "@workspace/db";
-import { eq, desc, and, or, sql } from "drizzle-orm";
+import { db, matchesTable, roundsTable, usersTable, achievementsTable, userAchievementsTable } from "@workspace/db";
+import { eq, desc, and, or, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import {
   CreateMatchBody,
@@ -9,7 +9,8 @@ import {
   SubmitRoundBody,
   ListMatchesQueryParams,
 } from "@workspace/api-zod";
-import { resolveRound, getAiChoice, type Elemental } from "../lib/gameEngine.js";
+import { resolveRound, getAiChoice, type Elemental, type Outcome } from "../lib/gameEngine.js";
+import { calculateMatchXp, evaluateAchievements, getLevelForXp } from "../lib/progression.js";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,91 @@ function formatMatch(match: typeof matchesTable.$inferSelect, p1Username?: strin
     createdAt: match.createdAt.toISOString(),
     completedAt: match.completedAt ? match.completedAt.toISOString() : null,
   };
+}
+
+/**
+ * Concede XP ao usuário e desbloqueia achievements recém-alcançados após o término
+ * de uma partida. Roda em "melhor esforço": qualquer erro aqui é logado mas não
+ * deve quebrar a resposta da rota de submissão de round, já que a partida em si
+ * já foi salva corretamente nesse ponto.
+ * Retorna o que foi concedido, para o front poder exibir notificações ("+25 XP", etc).
+ */
+async function grantPostMatchRewards(params: {
+  userId: number;
+  won: boolean;
+  isDraw: boolean;
+  mode: "SINGLE_PLAYER" | "MULTIPLAYER";
+  player1Choices: Elemental[];
+  roundOutcomes: Outcome[];
+}) {
+  const { userId, won, isDraw, mode, player1Choices, roundOutcomes } = params;
+
+  const xpGained = calculateMatchXp({ won, isDraw, mode, roundOutcomes });
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  if (!user) return null;
+
+  const newXp = user.xp + xpGained;
+  const newLevel = getLevelForXp(newXp);
+  const leveledUp = newLevel > user.level;
+
+  await db
+    .update(usersTable)
+    .set({ xp: newXp, level: newLevel })
+    .where(eq(usersTable.id, userId));
+
+  // Totais agregados necessários para achievements baseados em contagem.
+  const completedMatches = await db
+    .select()
+    .from(matchesTable)
+    .where(
+      sql`(${matchesTable.player1Id} = ${userId} OR ${matchesTable.player2Id} = ${userId}) AND ${matchesTable.status} = 'COMPLETED'`
+    );
+
+  const totalMatchesAfterMatch = completedMatches.length;
+  const totalWinsAfterMatch = completedMatches.filter((m) => m.winnerId === userId).length;
+
+  const candidateKeys = evaluateAchievements({
+    userId,
+    won,
+    isDraw,
+    totalWinsAfterMatch,
+    totalMatchesAfterMatch,
+    newLevel,
+    player1Choices,
+    roundOutcomes,
+  });
+
+  let newlyUnlocked: { key: string; name: string; description: string }[] = [];
+
+  if (candidateKeys.length > 0) {
+    const alreadyUnlocked = await db
+      .select({ key: achievementsTable.key })
+      .from(userAchievementsTable)
+      .innerJoin(achievementsTable, eq(userAchievementsTable.achievementId, achievementsTable.id))
+      .where(eq(userAchievementsTable.userId, userId));
+
+    const alreadyUnlockedKeys = new Set(alreadyUnlocked.map((a) => a.key));
+    const trulyNewKeys = candidateKeys.filter((key) => !alreadyUnlockedKeys.has(key));
+
+    if (trulyNewKeys.length > 0) {
+      const achievementRows = await db
+        .select()
+        .from(achievementsTable)
+        .where(inArray(achievementsTable.key, trulyNewKeys));
+
+      if (achievementRows.length > 0) {
+        await db
+          .insert(userAchievementsTable)
+          .values(achievementRows.map((a) => ({ userId, achievementId: a.id })))
+          .onConflictDoNothing();
+
+        newlyUnlocked = achievementRows.map((a) => ({ key: a.key, name: a.name, description: a.description }));
+      }
+    }
+  }
+
+  return { xpGained, newXp, newLevel, leveledUp, newlyUnlocked };
 }
 
 router.get("/matches", requireAuth, async (req, res): Promise<void> => {
@@ -207,6 +293,7 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
   let newStatus = match.status;
   let winnerId: number | null = match.winnerId ?? null;
   let completedAt: Date | null = match.completedAt ?? null;
+  let rewards: Awaited<ReturnType<typeof grantPostMatchRewards>> = null;
 
   if (newPlayer1Score >= 2 || newPlayer2Score >= 2 || roundNumber >= 3) {
     newStatus = "COMPLETED";
@@ -231,6 +318,28 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
     })
     .where(eq(matchesTable.id, match.id));
 
+  // Concede XP e checa achievements somente quando a partida acabou de ser concluída
+  // nesta requisição (não em toda submissão de round).
+  if (newStatus === "COMPLETED") {
+    const allRoundsForMatch = [...existingRounds, round];
+    const player1Choices = allRoundsForMatch.map((r) => r.player1Choice as Elemental);
+    const roundOutcomes = allRoundsForMatch.map((r) => r.outcome as Outcome);
+
+    try {
+      rewards = await grantPostMatchRewards({
+        userId: match.player1Id,
+        won: winnerId === match.player1Id,
+        isDraw: winnerId === null,
+        mode: match.mode as "SINGLE_PLAYER" | "MULTIPLAYER",
+        player1Choices,
+        roundOutcomes,
+      });
+    } catch (err) {
+      // Best-effort: não falhar a resposta do round por causa de XP/achievements.
+      console.error("Falha ao conceder recompensas pós-partida:", err);
+    }
+  }
+
   res.json({
     id: round.id,
     matchId: round.matchId,
@@ -239,6 +348,15 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
     player2Choice: round.player2Choice,
     outcome: round.outcome,
     createdAt: round.createdAt.toISOString(),
+    ...(rewards ? {
+      rewards: {
+        xpGained: rewards.xpGained,
+        newXp: rewards.newXp,
+        newLevel: rewards.newLevel,
+        leveledUp: rewards.leveledUp,
+        newlyUnlockedAchievements: rewards.newlyUnlocked,
+      },
+    } : {}),
   });
 });
 
