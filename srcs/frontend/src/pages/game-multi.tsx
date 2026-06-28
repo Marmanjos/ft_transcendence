@@ -303,17 +303,16 @@ export default function GameMulti() {
                   <AnimatePresence mode="wait">
                     {selectedElemental ? (
                       <motion.div key={`you-${selectedElemental}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                        <ElementalAvatar elemental={selectedElemental} side="left" size={150}
-                          animate={clashAnimating ? "attack" : "idle"} />
+                        <ElementalCard type={selectedElemental} size="lg" disabled />
                       </motion.div>
                     ) : roundResult ? (
                       <motion.div key={`you-result-${roundResult.yourChoice}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                        <ElementalAvatar elemental={roundResult.yourChoice} side="left" size={150} animate="idle" />
+                        <ElementalCard type={roundResult.yourChoice} size="lg" disabled />
                       </motion.div>
                     ) : (
                       <motion.div key="you-placeholder" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                        <div style={{ width: 150, height: 218 }} className="flex items-center justify-center">
-                          <div className="w-20 h-28 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center">
+                        <div style={{ width: 256, height: 320 }} className="flex items-center justify-center">
+                          <div className="w-56 h-72 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center">
                             <p className="font-mono text-primary/30 text-xs uppercase tracking-widest text-center">Escolha</p>
                           </div>
                         </div>
@@ -355,20 +354,23 @@ export default function GameMulti() {
                   <AnimatePresence mode="wait">
                     {state === "WAITING" && selectedElemental ? (
                       <motion.div key="opp-waiting" initial={{ opacity: 0 }} animate={{ opacity: 0.5 }}>
-                        <div style={{ width: 150, height: 218 }} className="flex items-center justify-center">
-                          <div className="w-20 h-28 rounded-xl border-2 border-dashed border-destructive/20 flex items-center justify-center">
+                        <div style={{ width: 256, height: 320 }} className="flex items-center justify-center">
+                          <div className="w-56 h-72 rounded-xl border-2 border-dashed border-destructive/20 flex items-center justify-center">
                             <div className="w-5 h-5 border-2 border-destructive/40 border-t-transparent rounded-full animate-spin" />
                           </div>
                         </div>
                       </motion.div>
                     ) : roundResult ? (
                       <motion.div key={`opp-${roundResult.opponentChoice}`} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                        <ElementalAvatar elemental={roundResult.opponentChoice} side="right" size={150}
-                          animate={clashAnimating ? "attack" : "idle"} />
+                        <ElementalCard type={roundResult.opponentChoice} size="lg" disabled />
                       </motion.div>
                     ) : (
                       <motion.div key="opp-placeholder" initial={{ opacity: 0 }} animate={{ opacity: 0.6 }}>
-                        <ElementalAvatar elemental={Elemental.WRAITH} side="right" size={150} faded />
+                        <div style={{ width: 256, height: 320 }} className="flex items-center justify-center opacity-40">
+                          <div className="w-56 h-72 rounded-xl border-2 border-dashed border-white/20 flex items-center justify-center">
+                            <p className="font-mono text-white/20 text-xs uppercase tracking-widest text-center">Aguardando</p>
+                          </div>
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -415,7 +417,7 @@ export default function GameMulti() {
 
                 {roundResult && (
                   <div className="mb-4">
-                    <ElementalAvatar elemental={roundResult.yourChoice} side="left" size={110} animate="idle" />
+                    <ElementalCard type={roundResult.yourChoice} size="md" disabled />
                   </div>
                 )}
 
@@ -432,21 +434,15 @@ export default function GameMulti() {
                   <span className="text-destructive">{opponentScore}</span>
                 </div>
 
-                <div className="flex flex-col gap-3 w-full">
+                <div className="flex gap-3 w-full">
                   <Button onClick={handleOfferRematch} size="lg"
-                    className="w-full h-12 font-bold uppercase tracking-widest neon-box">
-                    Revanche
+                    className="flex-1 h-12 font-bold uppercase tracking-widest neon-box">
+                    Jogar Novamente
                   </Button>
-                  <div className="flex gap-3">
-                    <Button onClick={() => { send({ type: "JOIN_QUEUE" }); setState("QUEUING"); setMatchInfo(null); setMatchOver(null); }}
-                      variant="outline" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest">
-                      Nova Partida
-                    </Button>
-                    <Button onClick={() => setLocation("/lobby")} variant="ghost" size="lg"
-                      className="flex-1 h-12 font-bold uppercase tracking-widest text-white/50">
-                      Lobby
-                    </Button>
-                  </div>
+                  <Button onClick={() => setLocation("/lobby")} variant="outline" size="lg"
+                    className="flex-1 h-12 font-bold uppercase tracking-widest">
+                    Sair da Sala
+                  </Button>
                 </div>
               </motion.div>
             </motion.div>

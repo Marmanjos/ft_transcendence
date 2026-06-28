@@ -5,6 +5,7 @@ import { LogOut, Home, History, Trophy, User, Users, UsersRound, Bell } from "lu
 import { useEffect } from "react";
 import { useWs } from "@/hooks/use-ws";
 import { useToast } from "@/hooks/use-toast";
+import { BUILD_TAG } from "@/lib/build-tag";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useNotifications, type AppNotification } from "@/hooks/use-notifications";
 
@@ -94,7 +95,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout, token } = useAuth();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  const { onMessage } = useWs(token);
+  const { send, onMessage } = useWs(token);
 
   // Apenas GAME_INVITE_RECEIVED continua como toast puro (não persiste)
   useEffect(() => {

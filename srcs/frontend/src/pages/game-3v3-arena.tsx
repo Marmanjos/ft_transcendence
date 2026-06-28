@@ -236,9 +236,9 @@ export default function Game3v3Arena() {
               {leftChoice && (
                 <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
                   {arenaState === "ROUND_RESULT" ? (
-                    <ElementalAvatar elemental={leftChoice as Elemental} side="left" size={120} />
+                    <ElementalCard type={leftChoice as Elemental} size="md" disabled />
                   ) : (
-                    <div className="w-[120px] h-[174px] rounded-xl border-2 border-dashed border-red-500/40 bg-red-950/20 flex items-center justify-center">
+                    <div className="w-48 h-64 rounded-xl border-2 border-dashed border-red-500/40 bg-red-950/20 flex items-center justify-center">
                       <span className="text-xs font-mono text-red-400 font-bold uppercase tracking-widest">Pronto</span>
                     </div>
                   )}
@@ -253,11 +253,11 @@ export default function Game3v3Arena() {
             <div className="flex flex-col items-center gap-2">
               {centerChoice ? (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <ElementalAvatar elemental={centerChoice as Elemental} side="left" size={150} />
+                  <ElementalCard type={centerChoice as Elemental} size="md" disabled />
                 </motion.div>
               ) : (
-                <div style={{ width: 150, height: 218 }} className="flex items-center justify-center">
-                  <div className="w-20 h-28 rounded-xl border-2 border-dashed border-red-400/20 flex items-center justify-center">
+                <div style={{ width: 192, height: 256 }} className="flex items-center justify-center">
+                  <div className="w-44 h-56 rounded-xl border-2 border-dashed border-red-400/20 flex items-center justify-center">
                     <p className="font-mono text-red-300/30 text-xs uppercase tracking-widest text-center">
                       {arenaState === "WAITING" ? "..." : "Escolha"}
                     </p>
@@ -274,9 +274,9 @@ export default function Game3v3Arena() {
               {rightChoice && (
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
                   {arenaState === "ROUND_RESULT" ? (
-                    <ElementalAvatar elemental={rightChoice as Elemental} side="right" size={120} />
+                    <ElementalCard type={rightChoice as Elemental} size="md" disabled />
                   ) : (
-                    <div className="w-[120px] h-[174px] rounded-xl border-2 border-dashed border-red-500/40 bg-red-950/20 flex items-center justify-center">
+                    <div className="w-48 h-64 rounded-xl border-2 border-dashed border-red-500/40 bg-red-950/20 flex items-center justify-center">
                       <span className="text-xs font-mono text-red-400 font-bold uppercase tracking-widest">Pronto</span>
                     </div>
                   )}

@@ -398,7 +398,17 @@ export default function RoomPage() {
               <motion.div key="arena" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col gap-8 justify-between">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                   <div className="lg:col-span-1 flex flex-col items-center gap-2">
-                    <ElementalAvatar elemental={roundResult?.yourChoice ?? selectedElemental ?? Elemental.WRAITH} side="left" size={150} animate={arenaState === "WAITING" ? "idle" : "idle"} />
+                    {selectedElemental ? (
+                      <ElementalCard type={selectedElemental} size="lg" disabled />
+                    ) : roundResult?.yourChoice ? (
+                      <ElementalCard type={roundResult.yourChoice} size="lg" disabled />
+                    ) : (
+                      <div style={{ width: 256, height: 320 }} className="flex items-center justify-center">
+                        <div className="w-56 h-72 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center">
+                          <p className="font-mono text-primary/30 text-xs uppercase tracking-widest text-center">Escolha</p>
+                        </div>
+                      </div>
+                    )}
                     <p className="font-mono text-primary text-xs uppercase tracking-widest">{user?.username}</p>
                     {roundResult && <p className="text-xs font-bold text-white/50 uppercase">{roundResult.yourChoice}</p>}
                   </div>
@@ -427,7 +437,21 @@ export default function RoomPage() {
                   </div>
 
                   <div className="lg:col-span-1 flex flex-col items-center gap-2">
-                    <ElementalAvatar elemental={roundResult?.opponentChoice ?? Elemental.WRAITH} side="right" size={150} animate={arenaState === "WAITING" ? "idle" : "idle"} />
+                    {arenaState === "WAITING" && selectedElemental ? (
+                      <div style={{ width: 256, height: 320 }} className="flex items-center justify-center">
+                        <div className="w-56 h-72 rounded-xl border-2 border-dashed border-destructive/20 flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-destructive/40 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      </div>
+                    ) : roundResult?.opponentChoice ? (
+                      <ElementalCard type={roundResult.opponentChoice} size="lg" disabled />
+                    ) : (
+                      <div style={{ width: 256, height: 320 }} className="flex items-center justify-center opacity-40">
+                        <div className="w-56 h-72 rounded-xl border-2 border-dashed border-white/20 flex items-center justify-center">
+                          <p className="font-mono text-white/20 text-xs uppercase tracking-widest text-center">Aguardando</p>
+                        </div>
+                      </div>
+                    )}
                     <p className="font-mono text-destructive text-xs uppercase tracking-widest">{matchInfo.opponentUsername}</p>
                     {roundResult && <p className="text-xs font-bold text-white/50 uppercase">{roundResult.opponentChoice}</p>}
                   </div>
@@ -463,7 +487,7 @@ export default function RoomPage() {
           {arenaState === "MATCH_OVER" && matchOver && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
               <motion.div initial={{ scale: 0.8, y: 40 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", bounce: 0.3 }} className="flex flex-col items-center text-center p-10 border border-border rounded-2xl bg-card/80 max-w-lg w-full mx-4" style={{ boxShadow: isWinner ? "0 0 60px rgba(0,255,255,0.2)" : "0 0 60px rgba(255,50,50,0.1)" }}>
-                {roundResult && <div className="mb-4"><ElementalAvatar elemental={roundResult.yourChoice} side="left" size={110} animate="idle" /></div>}
+                {roundResult && <div className="mb-4"><ElementalCard type={roundResult.yourChoice} size="md" disabled /></div>}
                 <h1 className={`text-6xl font-black uppercase tracking-tighter mb-2 ${isWinner ? "text-primary neon-text" : isDraw ? "text-white/60" : "text-destructive"}`}>{isWinner ? "VITÓRIA" : isDraw ? "EMPATE" : "DERROTA"}</h1>
                 <p className="font-mono text-white/40 uppercase tracking-widest text-sm mb-2">Placar Final</p>
                 <div className="text-4xl font-black mb-8">
@@ -471,12 +495,13 @@ export default function RoomPage() {
                   <span className="text-white/30 mx-3">-</span>
                   <span className="text-destructive">{opponentScore}</span>
                 </div>
-                <div className="flex flex-col gap-3 w-full">
-                  <Button onClick={handleOfferRematch} size="lg" className="w-full h-12 font-bold uppercase tracking-widest neon-box">Revanche</Button>
-                  <div className="flex gap-3">
-                    <Button onClick={() => setLocation("/lobby")} variant="outline" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest">Lobby</Button>
-                    <Button onClick={handleLeaveRoom} variant="ghost" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest text-white/50">Sair da sala</Button>
-                  </div>
+                <div className="flex gap-3 w-full">
+                  <Button onClick={handleOfferRematch} size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest neon-box">
+                    Jogar Novamente
+                  </Button>
+                  <Button onClick={handleLeaveRoom} variant="outline" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest">
+                    Sair da Sala
+                  </Button>
                 </div>
               </motion.div>
             </motion.div>
