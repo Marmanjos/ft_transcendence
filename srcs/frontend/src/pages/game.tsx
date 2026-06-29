@@ -20,7 +20,7 @@ type GameState = "SELECTING" | "COUNTDOWN" | "CLASH" | "ROUND_RESULT" | "MATCH_O
 
 export default function Game() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const searchParams = new URLSearchParams(window.location.search);
@@ -36,6 +36,7 @@ export default function Game() {
   const [selectedElemental, setSelectedElemental] = useState<Elemental | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [paused, setPaused] = useState(false);
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const [roundResult, setRoundResult] = useState<{
     playerChoice: Elemental;
     aiChoice: Elemental;
@@ -59,14 +60,35 @@ export default function Game() {
   }, [match, gameState]);
 
   useEffect(() => {
-    const handleAbandon = () => {
-      if (matchId) {
-        navigator.sendBeacon(`/api/matches/${matchId}/abandon`);
+    const handlePopState = (e: PopStateEvent) => {
+      if (gameState !== "MATCH_OVER" && window.isMatchActive) {
+        e.preventDefault();
+        window.history.pushState(null, "", window.location.href);
+        setShowAbandonConfirm(true);
       }
     };
-    window.addEventListener("match-abandoned", handleAbandon);
-    return () => window.removeEventListener("match-abandoned", handleAbandon);
-  }, [matchId]);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [gameState]);
+
+  const handleConfirmAbandon = async () => {
+    window.isMatchActive = false;
+    setShowAbandonConfirm(false);
+    try {
+      if (matchId) {
+        await fetch(`/api/matches/${matchId}/abandon`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          },
+          keepalive: true
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao abandonar partida", err);
+    }
+    setLocation("/lobby");
+  };
 
   useEffect(() => {
     if (match?.status === MatchStatus.COMPLETED && gameState !== "MATCH_OVER") {
@@ -214,8 +236,12 @@ export default function Game() {
     setPaused(false);
     try {
       if (matchId) {
-        await fetch(`/api/matches/${matchId}/abandon`, { method: "POST" })
-          .catch((err) => console.error("Erro ao abandonar partida anterior", err));
+        await fetch(`/api/matches/${matchId}/abandon`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        }).catch((err) => console.error("Erro ao abandonar partida anterior", err));
       }
       const newMatch = await createMatch.mutateAsync({
         data: { 
@@ -605,15 +631,45 @@ export default function Game() {
           <PauseMenu
             onResume={() => setPaused(false)}
             onRestart={handleRestart}
-            onMainMenu={() => {
-              if (window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
-                window.isMatchActive = false;
-                fetch(`/api/matches/${matchId}/abandon`, { method: "POST" })
-                  .catch((err) => console.error("Erro ao abandonar partida", err));
-                setLocation("/lobby");
-              }
-            }}
+            onAbandon={handleConfirmAbandon}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── ABANDON CONFIRM MODAL ── */}
+      <AnimatePresence>
+        {showAbandonConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          >
+            <div className="flex flex-col items-center text-center p-10 border border-destructive/30 rounded-2xl bg-card max-w-sm w-full mx-4"
+              style={{ boxShadow: "0 0 60px rgba(255,0,0,0.15)" }}>
+              <div className="text-[10px] font-mono text-destructive uppercase tracking-[0.4em] mb-2">Alerta de Saída</div>
+              <h2 className="text-2xl font-black uppercase text-destructive mb-4">Abandonar Duelo?</h2>
+              <p className="font-mono text-xs text-white/50 mb-8 uppercase leading-relaxed">
+                Ação de navegação detectada. Sair agora irá registrar uma derrota por abandono.
+              </p>
+              <div className="flex flex-col gap-3 w-full">
+                <Button
+                  onClick={handleConfirmAbandon}
+                  className="w-full h-12 text-sm font-bold uppercase tracking-widest bg-destructive hover:bg-destructive/80 text-white"
+                  style={{ boxShadow: "0 0 20px rgba(255,0,0,0.3)" }}
+                >
+                  Confirmar Abandono
+                </Button>
+                <Button
+                  onClick={() => setShowAbandonConfirm(false)}
+                  variant="outline"
+                  className="w-full h-12 text-sm font-bold uppercase tracking-widest border-muted-foreground/30 text-white bg-transparent"
+                >
+                  Voltar ao Jogo
+                </Button>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
