@@ -10,6 +10,12 @@ import { useToast } from "@/hooks/use-toast";
 import { CombatScene } from "@/components/arena/CombatScene";
 import { Pause } from "lucide-react";
 
+declare global {
+  interface Window {
+    isMatchActive?: boolean;
+  }
+}
+
 type GameState = "SELECTING" | "COUNTDOWN" | "CLASH" | "ROUND_RESULT" | "MATCH_OVER";
 
 export default function Game() {
@@ -40,6 +46,27 @@ export default function Game() {
   useEffect(() => {
     if (!matchId) setLocation("/lobby");
   }, [matchId, setLocation]);
+
+  useEffect(() => {
+    if (match && match.status === MatchStatus.ACTIVE && gameState !== "MATCH_OVER") {
+      window.isMatchActive = true;
+    } else {
+      window.isMatchActive = false;
+    }
+    return () => {
+      window.isMatchActive = false;
+    };
+  }, [match, gameState]);
+
+  useEffect(() => {
+    const handleAbandon = () => {
+      if (matchId) {
+        navigator.sendBeacon(`/api/matches/${matchId}/abandon`);
+      }
+    };
+    window.addEventListener("match-abandoned", handleAbandon);
+    return () => window.removeEventListener("match-abandoned", handleAbandon);
+  }, [matchId]);
 
   useEffect(() => {
     if (match?.status === MatchStatus.COMPLETED && gameState !== "MATCH_OVER") {
@@ -186,12 +213,17 @@ export default function Game() {
   const handleRestart = async () => {
     setPaused(false);
     try {
+      if (matchId) {
+        await fetch(`/api/matches/${matchId}/abandon`, { method: "POST" })
+          .catch((err) => console.error("Erro ao abandonar partida anterior", err));
+      }
       const newMatch = await createMatch.mutateAsync({
         data: { 
           mode: MatchMode.SINGLE_PLAYER,
           aiDifficulty: match.aiDifficulty 
         },
       });
+      window.isMatchActive = false;
       setLocation(`/game?matchId=${newMatch.id}`);
       window.location.reload();
     } catch {
@@ -573,7 +605,14 @@ export default function Game() {
           <PauseMenu
             onResume={() => setPaused(false)}
             onRestart={handleRestart}
-            onMainMenu={() => setLocation("/")}
+            onMainMenu={() => {
+              if (window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
+                window.isMatchActive = false;
+                fetch(`/api/matches/${matchId}/abandon`, { method: "POST" })
+                  .catch((err) => console.error("Erro ao abandonar partida", err));
+                setLocation("/lobby");
+              }
+            }}
           />
         )}
       </AnimatePresence>
