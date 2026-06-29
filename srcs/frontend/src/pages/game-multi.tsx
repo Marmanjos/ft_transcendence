@@ -11,6 +11,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useWs, type ServerMsg } from "@/hooks/use-ws";
 import { Pause } from "lucide-react";
 
+declare global {
+  interface Window {
+    isMatchActive?: boolean;
+  }
+}
+
 type MultiState =
   | "CONNECTING"
   | "QUEUING"
@@ -65,6 +71,28 @@ export default function GameMulti() {
       send({ type: "JOIN_QUEUE" });
     }
   }, [connected, send]);
+
+  useEffect(() => {
+    const isPlaying = matchInfo && state !== "MATCH_OVER" && state !== "OPPONENT_DISCONNECTED" && state !== "ERROR";
+    if (isPlaying) {
+      window.isMatchActive = true;
+    } else {
+      window.isMatchActive = false;
+    }
+    return () => {
+      window.isMatchActive = false;
+    };
+  }, [matchInfo, state]);
+
+  useEffect(() => {
+    const handleAbandon = () => {
+      if (matchInfo) {
+        send({ type: "ABANDON_MATCH", matchId: matchInfo.matchId });
+      }
+    };
+    window.addEventListener("match-abandoned", handleAbandon);
+    return () => window.removeEventListener("match-abandoned", handleAbandon);
+  }, [matchInfo, send]);
 
   useEffect((): (() => void) => {
     const off = onMessage((msg: ServerMsg) => {
@@ -556,8 +584,26 @@ export default function GameMulti() {
         {paused && (
           <PauseMenu
             onResume={() => setPaused(false)}
-            onRestart={() => { send({ type: "LEAVE_QUEUE" }); window.location.reload(); }}
-            onMainMenu={() => setLocation("/")}
+            onRestart={() => {
+              if (window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
+                window.isMatchActive = false;
+                if (matchInfo) {
+                  send({ type: "ABANDON_MATCH", matchId: matchInfo.matchId });
+                }
+                send({ type: "LEAVE_QUEUE" });
+                window.location.reload();
+              }
+            }}
+            onMainMenu={() => {
+              if (window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
+                window.isMatchActive = false;
+                if (matchInfo) {
+                  send({ type: "ABANDON_MATCH", matchId: matchInfo.matchId });
+                }
+                send({ type: "LEAVE_QUEUE" });
+                setLocation("/lobby");
+              }
+            }}
           />
         )}
       </AnimatePresence>
