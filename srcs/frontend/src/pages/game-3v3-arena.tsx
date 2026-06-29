@@ -90,9 +90,12 @@ export default function Game3v3Arena() {
   // Connect & Sync State
   useEffect(() => {
     if (!matchId || !connected) return;
-
-    // Send SYNC_MATCH message to fetch current state
+    // Send SYNC_MATCH message to fetch current state once connected
     send({ type: "SYNC_MATCH", matchId: Number(matchId) });
+  }, [matchId, connected]);
+
+  useEffect(() => {
+    if (!matchId || !connected) return;
 
     const off = onMessage((msg) => {
       switch (msg.type) {
@@ -159,6 +162,7 @@ export default function Game3v3Arena() {
           setFinalScores((msg as { scores: Record<string, number> }).scores);
           setArenaState("MATCH_OVER");
           break;
+        case "OPPONENT_TEMORARILY_DISCONNECTED":
         case "OPPONENT_TEMPORARILY_DISCONNECTED":
           setOpponentOffline(true);
           setOfflineCountdown(8);
