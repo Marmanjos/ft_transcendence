@@ -242,4 +242,38 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
   });
 });
 
+router.post("/matches/:id/abandon", requireAuth, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [match] = await db
+    .select()
+    .from(matchesTable)
+    .where(and(eq(matchesTable.id, params.data.id), eq(matchesTable.player1Id, req.user!.userId)))
+    .limit(1);
+
+  if (!match) {
+    res.status(404).json({ error: "Partida não encontrada" });
+    return;
+  }
+
+  if (match.status !== "ACTIVE") {
+    res.status(400).json({ error: "Partida já finalizada" });
+    return;
+  }
+
+  await db
+    .update(matchesTable)
+    .set({
+      status: "ABANDONED",
+      completedAt: new Date(),
+    })
+    .where(eq(matchesTable.id, match.id));
+
+  res.json({ success: true, message: "Partida abandonada com sucesso" });
+});
+
 export default router;

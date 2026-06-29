@@ -46,7 +46,8 @@ type ClientMsg =
   | { type: "SEND_ROOM_CHAT"; text: string }
   | { type: "INVITE_TO_PLAY"; targetUserId: number }
   | { type: "PING" }
-  | { type: "SYNC_MATCH"; matchId: number };
+  | { type: "SYNC_MATCH"; matchId: number }
+  | { type: "ABANDON_MATCH"; matchId: number };
 
 interface ConnectedPlayer {
   ws: WebSocket;
@@ -895,6 +896,53 @@ async function handleOfferRematch(player: ConnectedPlayer, matchId: number) {
   }
 }
 
+async function handleAbandonMatch(player: ConnectedPlayer, matchId: number) {
+  // 1. Check 1v1 active rooms
+  const room = rooms.get(matchId);
+  if (room) {
+    const isPlayer1 = room.player1.userId === player.userId;
+    const isPlayer2 = room.player2.userId === player.userId;
+    if (isPlayer1 || isPlayer2) {
+      const opponent = isPlayer1 ? room.player2 : room.player1;
+      const winnerId = isPlayer1 ? room.player2.userId : room.player1.userId;
+
+      send(opponent.ws, { type: "OPPONENT_DISCONNECTED" });
+      rooms.delete(matchId);
+
+      await db.update(matchesTable)
+        .set({ 
+          status: "COMPLETED", 
+          winnerId,
+          completedAt: new Date() 
+        })
+        .where(eq(matchesTable.id, matchId))
+        .catch((err) => logger.error({ err }, "Failed to update match on voluntary abandon"));
+
+      logger.info({ matchId, userId: player.userId }, "Player voluntarily abandoned 1v1 match");
+    }
+    return;
+  }
+
+  // 2. Check 3v3 active rooms
+  const match3v3 = rooms3v3.get(matchId);
+  if (match3v3) {
+    if (match3v3.players.some((p) => p.userId === player.userId)) {
+      for (const p of match3v3.players) {
+        if (p.userId !== player.userId) {
+          sendToUser(p.userId, { type: "OPPONENT_DISCONNECTED" });
+        }
+      }
+      rooms3v3.delete(matchId);
+      const partyRoom = Array.from(partyRooms.values()).find((r) => r.matchId === matchId);
+      if (partyRoom) {
+        partyRoom.matchId = null;
+        broadcastPartyRoomState(partyRoom);
+      }
+      logger.info({ matchId, userId: player.userId }, "Player voluntarily abandoned 3v3 match");
+    }
+  }
+}
+
 function handleDisconnect(userId: number) {
   if (waitingPlayer?.userId === userId) {
     waitingPlayer = null;
@@ -1018,6 +1066,9 @@ export function attachWsServer(server: Server) {
           break;
         case "SYNC_MATCH":
           sendSyncMatchState(player.userId, msg.matchId);
+          break;
+        case "ABANDON_MATCH":
+          await handleAbandonMatch(player, msg.matchId);
           break;
       }
     };
