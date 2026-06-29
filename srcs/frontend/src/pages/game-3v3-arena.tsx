@@ -11,6 +11,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { MatchManager, type Match, type RoundResult } from "@/lib/match-manager";
 import { useWs } from "@/hooks/use-ws";
 import { useToast } from "@/hooks/use-toast";
+import { PauseMenu } from "@/components/pause-menu";
+
+declare global {
+  interface Window {
+    isMatchActive?: boolean;
+  }
+}
 
 type ArenaState = "SELECTING" | "WAITING" | "ROUND_RESULT" | "MATCH_OVER";
 
@@ -44,6 +51,28 @@ export default function Game3v3Arena() {
     }, 1000);
     return () => clearInterval(interval);
   }, [opponentOffline, offlineCountdown]);
+
+  useEffect(() => {
+    const isPlaying = match && arenaState !== "MATCH_OVER";
+    if (isPlaying) {
+      window.isMatchActive = true;
+    } else {
+      window.isMatchActive = false;
+    }
+    return () => {
+      window.isMatchActive = false;
+    };
+  }, [match, arenaState]);
+
+  useEffect(() => {
+    const handleAbandon = () => {
+      if (matchId) {
+        send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
+      }
+    };
+    window.addEventListener("match-abandoned", handleAbandon);
+    return () => window.removeEventListener("match-abandoned", handleAbandon);
+  }, [matchId, send]);
 
   // Connect & Sync State
   useEffect(() => {
@@ -502,6 +531,33 @@ export default function Game3v3Arena() {
               </p>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── PAUSE MENU ── */}
+      <AnimatePresence>
+        {paused && (
+          <PauseMenu
+            onResume={() => setPaused(false)}
+            onRestart={() => {
+              if (window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
+                window.isMatchActive = false;
+                if (matchId) {
+                  send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
+                }
+                setLocation("/game/3v3");
+              }
+            }}
+            onMainMenu={() => {
+              if (window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
+                window.isMatchActive = false;
+                if (matchId) {
+                  send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
+                }
+                setLocation("/lobby");
+              }
+            }}
+          />
         )}
       </AnimatePresence>
     </div>
