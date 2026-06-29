@@ -1069,6 +1069,15 @@ export function attachWsServer(server: Server) {
               const side = activeMatchRoom.player1.userId === user.id ? "player1" : "player2";
               const opponent = side === "player1" ? activeMatchRoom.player2 : activeMatchRoom.player1;
               send(opponent.ws, { type: "OPPONENT_RECONNECTED" });
+            } else {
+              const active3v3Room = rooms3v3.get(partyRoom.matchId);
+              if (active3v3Room) {
+                for (const p of active3v3Room.players) {
+                  if (p.userId !== user.id) {
+                    sendToUser(p.userId, { type: "OPPONENT_RECONNECTED" });
+                  }
+                }
+              }
             }
           }
         }
@@ -1110,6 +1119,15 @@ export function attachWsServer(server: Server) {
                   const side = activeMatchRoom.player1.userId === userId ? "player1" : "player2";
                   const opponent = side === "player1" ? activeMatchRoom.player2 : activeMatchRoom.player1;
                   send(opponent.ws, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
+                } else {
+                  const active3v3Room = rooms3v3.get(partyRoom.matchId);
+                  if (active3v3Room) {
+                    for (const p of active3v3Room.players) {
+                      if (p.userId !== userId) {
+                        sendToUser(p.userId, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
+                      }
+                    }
+                  }
                 }
               }
             }
