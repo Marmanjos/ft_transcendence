@@ -39,6 +39,7 @@ export default function Game3v3Arena() {
   const [yourChoice, setYourChoice] = useState<Elemental | null>(null);
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
   const [paused, setPaused] = useState(false);
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const [opponentOffline, setOpponentOffline] = useState(false);
   const [offlineCountdown, setOfflineCountdown] = useState(8);
   const [finalScores, setFinalScores] = useState<Record<string, number> | null>(null);
@@ -65,14 +66,26 @@ export default function Game3v3Arena() {
   }, [match, arenaState]);
 
   useEffect(() => {
-    const handleAbandon = () => {
-      if (matchId) {
-        send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
+    const handlePopState = (e: PopStateEvent) => {
+      const isPlaying = match && arenaState !== "MATCH_OVER";
+      if (isPlaying && window.isMatchActive) {
+        e.preventDefault();
+        window.history.pushState(null, "", window.location.href);
+        setShowAbandonConfirm(true);
       }
     };
-    window.addEventListener("match-abandoned", handleAbandon);
-    return () => window.removeEventListener("match-abandoned", handleAbandon);
-  }, [matchId, send]);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [match, arenaState]);
+
+  const handleConfirmAbandon = () => {
+    window.isMatchActive = false;
+    setShowAbandonConfirm(false);
+    if (matchId) {
+      send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
+    }
+    setLocation("/lobby");
+  };
 
   // Connect & Sync State
   useEffect(() => {
@@ -540,24 +553,51 @@ export default function Game3v3Arena() {
           <PauseMenu
             onResume={() => setPaused(false)}
             onRestart={() => {
-              if (window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
-                window.isMatchActive = false;
-                if (matchId) {
-                  send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
-                }
-                setLocation("/game/3v3");
+              window.isMatchActive = false;
+              if (matchId) {
+                send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
               }
+              setLocation("/game/3v3");
             }}
-            onMainMenu={() => {
-              if (window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
-                window.isMatchActive = false;
-                if (matchId) {
-                  send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
-                }
-                setLocation("/lobby");
-              }
-            }}
+            onAbandon={handleConfirmAbandon}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── ABANDON CONFIRM MODAL ── */}
+      <AnimatePresence>
+        {showAbandonConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          >
+            <div className="flex flex-col items-center text-center p-10 border border-destructive/30 rounded-2xl bg-card max-w-sm w-full mx-4"
+              style={{ boxShadow: "0 0 60px rgba(255,0,0,0.15)" }}>
+              <div className="text-[10px] font-mono text-destructive uppercase tracking-[0.4em] mb-2">Alerta de Saída</div>
+              <h2 className="text-2xl font-black uppercase text-destructive mb-4">Abandonar Duelo?</h2>
+              <p className="font-mono text-xs text-white/50 mb-8 uppercase leading-relaxed">
+                Ação de navegação detectada. Sair agora irá registrar uma derrota por abandono.
+              </p>
+              <div className="flex flex-col gap-3 w-full">
+                <Button
+                  onClick={handleConfirmAbandon}
+                  className="w-full h-12 text-sm font-bold uppercase tracking-widest bg-destructive hover:bg-destructive/80 text-white"
+                  style={{ boxShadow: "0 0 20px rgba(255,0,0,0.3)" }}
+                >
+                  Confirmar Abandono
+                </Button>
+                <Button
+                  onClick={() => setShowAbandonConfirm(false)}
+                  variant="outline"
+                  className="w-full h-12 text-sm font-bold uppercase tracking-widest border-muted-foreground/30 text-white bg-transparent"
+                >
+                  Voltar ao Jogo
+                </Button>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
