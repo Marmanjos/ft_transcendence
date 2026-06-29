@@ -103,46 +103,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const { send, onMessage } = useWs(token);
 
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      if (window.isMatchActive) {
-        if (!window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
-          e.preventDefault();
-          window.history.pushState(null, "", window.location.href);
-        } else {
-          window.isMatchActive = false;
-          window.dispatchEvent(new CustomEvent("match-abandoned"));
-        }
-      }
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (window.isMatchActive) {
-      if (!window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
-        e.preventDefault();
-      } else {
-        window.isMatchActive = false;
-        window.dispatchEvent(new CustomEvent("match-abandoned"));
-        setLocation(href);
-      }
-    }
-  };
-
-  const handleLogoutClick = (e: React.MouseEvent) => {
-    if (window.isMatchActive) {
-      if (!window.confirm("Ao sair irá abandonar a partida. Deseja prosseguir?")) {
-        e.preventDefault();
-        return;
-      }
-      window.isMatchActive = false;
-      window.dispatchEvent(new CustomEvent("match-abandoned"));
-    }
-    logout();
-  };
-
   // Apenas GAME_INVITE_RECEIVED continua como toast puro (não persiste)
   useEffect(() => {
     if (!token) return;
@@ -177,7 +137,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-[100dvh] w-full flex flex-col bg-background text-foreground scanlines">
       <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
-          <Link href="/lobby" onClick={(e) => handleNavClick(e, "/lobby")} className="flex items-center gap-2">
+          <Link href="/lobby" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center border border-primary">
               <span className="text-primary font-bold neon-text">ED</span>
             </div>
@@ -187,22 +147,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <nav className="flex items-center gap-4">
-            <Link href="/lobby" onClick={(e) => handleNavClick(e, "/lobby")} className={`text-sm font-medium transition-colors hover:text-primary ${location === "/lobby" ? "text-primary neon-text" : "text-muted-foreground"}`}>
+            <Link href="/lobby" className={`text-sm font-medium transition-colors hover:text-primary ${location === "/lobby" ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><Home className="w-4 h-4" /> Lobby</span>
             </Link>
-            <Link href="/history" onClick={(e) => handleNavClick(e, "/history")} className={`text-sm font-medium transition-colors hover:text-primary ${location === "/history" ? "text-primary neon-text" : "text-muted-foreground"}`}>
+            <Link href="/history" className={`text-sm font-medium transition-colors hover:text-primary ${location === "/history" ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><History className="w-4 h-4" /> Histórico</span>
             </Link>
-            <Link href="/leaderboard" onClick={(e) => handleNavClick(e, "/leaderboard")} className={`text-sm font-medium transition-colors hover:text-primary ${location === "/leaderboard" ? "text-primary neon-text" : "text-muted-foreground"}`}>
+            <Link href="/leaderboard" className={`text-sm font-medium transition-colors hover:text-primary ${location === "/leaderboard" ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><Trophy className="w-4 h-4" /> Placar</span>
             </Link>
-            <Link href="/groups" onClick={(e) => handleNavClick(e, "/groups")} className={`text-sm font-medium transition-colors hover:text-primary ${location === "/groups" ? "text-primary neon-text" : "text-muted-foreground"}`}>
+            <Link href="/groups" className={`text-sm font-medium transition-colors hover:text-primary ${location === "/groups" ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><UsersRound className="w-4 h-4" /> Grupos</span>
             </Link>
-            <Link href={`/profile/${user?.id}`} onClick={(e) => handleNavClick(e, `/profile/${user?.id}`)} className={`text-sm font-medium transition-colors hover:text-primary ${location.startsWith("/profile") ? "text-primary neon-text" : "text-muted-foreground"}`}>
+            <Link href={`/profile/${user?.id}`} className={`text-sm font-medium transition-colors hover:text-primary ${location.startsWith("/profile") ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><User className="w-4 h-4" /> Perfil</span>
             </Link>
-            <Link href="/friends" onClick={(e) => handleNavClick(e, "/friends")} className={`text-sm font-medium transition-colors hover:text-primary ${location === "/friends" ? "text-primary neon-text" : "text-muted-foreground"}`}>
+            <Link href="/friends" className={`text-sm font-medium transition-colors hover:text-primary ${location === "/friends" ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><Users className="w-4 h-4" /> Amigos</span>
             </Link>
             <NotificationBell />
@@ -212,7 +172,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-sm text-muted-foreground hidden md:inline-block">
               {user?.username}
             </span>
-            <Button variant="ghost" size="icon" onClick={handleLogoutClick} title="Desconectar">
+            <Button variant="ghost" size="icon" onClick={logout} title="Desconectar">
               <LogOut className="h-5 w-5 text-destructive" />
             </Button>
             <div className="rounded-full border border-red-500/30 bg-black/70 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.28em] text-red-300">
