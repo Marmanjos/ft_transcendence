@@ -58,6 +58,8 @@ export default function History() {
                         ) : (
                           <span className="text-destructive font-black uppercase tracking-widest text-sm neon-text-destructive">Derrota</span>
                         )
+                      ) : match.status === MatchStatus.ABANDONED ? (
+                        <span className="text-destructive/70 font-black uppercase tracking-widest text-sm line-through">Abandono</span>
                       ) : (
                         <span className="text-accent font-bold uppercase tracking-widest text-sm">Em Andamento</span>
                       )}

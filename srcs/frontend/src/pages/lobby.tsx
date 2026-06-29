@@ -163,8 +163,18 @@ export default function Lobby() {
                     </div>
                     <div className="text-right">
                       <p className="font-black text-lg tracking-widest">{match.player1Score} - {match.player2Score}</p>
-                      <span className={`text-xs uppercase font-mono px-2 py-1 rounded ${match.status === MatchStatus.COMPLETED ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                        {match.status === MatchStatus.COMPLETED ? 'FINALIZADO' : 'EM ANDAMENTO'}
+                      <span className={`text-xs uppercase font-mono px-2 py-1 rounded ${
+                        match.status === MatchStatus.COMPLETED
+                          ? 'bg-primary/20 text-primary'
+                          : match.status === MatchStatus.ABANDONED
+                          ? 'bg-destructive/20 text-destructive/80 line-through'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {match.status === MatchStatus.COMPLETED
+                          ? 'FINALIZADO'
+                          : match.status === MatchStatus.ABANDONED
+                          ? 'ABANDONADO'
+                          : 'EM ANDAMENTO'}
                       </span>
                     </div>
                   </div>
