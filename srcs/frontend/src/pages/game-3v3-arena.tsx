@@ -32,6 +32,18 @@ export default function Game3v3Arena() {
   const [yourChoice, setYourChoice] = useState<Elemental | null>(null);
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
   const [paused, setPaused] = useState(false);
+  const [opponentOffline, setOpponentOffline] = useState(false);
+  const [offlineCountdown, setOfflineCountdown] = useState(8);
+  const [finalScores, setFinalScores] = useState<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    if (!opponentOffline) return undefined;
+    if (offlineCountdown <= 0) return undefined;
+    const interval = setInterval(() => {
+      setOfflineCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [opponentOffline, offlineCountdown]);
 
   // Connect & Sync State
   useEffect(() => {
@@ -102,7 +114,15 @@ export default function Game3v3Arena() {
           break;
         }
         case "MATCH_3V3_OVER":
+          setFinalScores((msg as { scores: Record<string, number> }).scores);
           setArenaState("MATCH_OVER");
+          break;
+        case "OPPONENT_TEMPORARILY_DISCONNECTED":
+          setOpponentOffline(true);
+          setOfflineCountdown(8);
+          break;
+        case "OPPONENT_RECONNECTED":
+          setOpponentOffline(false);
           break;
         case "OPPONENT_DISCONNECTED":
           toast({ title: "Oponente desconectou", description: "A partida foi cancelada.", variant: "destructive" });
@@ -191,37 +211,27 @@ export default function Game3v3Arena() {
         >
           <div className="flex flex-col gap-1 min-w-[140px]">
             <p className="font-mono text-red-300 uppercase tracking-widest text-xs truncate">{leftPlayer?.username}</p>
-            <div className="flex gap-2">
-              {[0, 1].map((i) => (
-                <div
-                  key={i}
-                  className={`h-2 w-10 rounded-sm ${i < (leftScore ?? 0) ? "bg-red-500" : "bg-white/20"}`}
-                />
-              ))}
-            </div>
+            <p className="text-xs font-mono text-white/50">Score: {leftScore}</p>
           </div>
 
           <div className="flex flex-col items-center gap-1">
             <p className="font-mono text-white/40 uppercase tracking-[0.3em] text-xs">3v3 Round</p>
             <p className="font-black text-3xl text-white/80">{match.round}</p>
+            <div className="flex flex-col items-center mt-1">
+              <p className="font-mono text-cyan-400 uppercase tracking-widest text-[10px] font-bold">{centerPlayer?.username} (Tu)</p>
+              <p className="text-xs font-mono text-cyan-400 font-bold">Score: {centerScore}</p>
+            </div>
             <button
               onClick={() => setPaused(true)}
-              className="mt-1 p-1.5 rounded border border-white/20 hover:border-red-500/60 text-white/40 hover:text-red-500 transition-colors"
+              className="mt-2 p-1.5 rounded border border-white/20 hover:border-red-500/60 text-white/40 hover:text-red-500 transition-colors"
             >
               <Pause className="w-4 h-4" />
             </button>
           </div>
 
           <div className="flex flex-col items-end gap-1 min-w-[140px]">
-            <p className="font-mono text-red-300 uppercase tracking-widest text-xs truncate">{rightPlayer?.username}</p>
-            <div className="flex gap-2 justify-end">
-              {[0, 1].map((i) => (
-                <div
-                  key={i}
-                  className={`h-2 w-10 rounded-sm ${i < (rightScore ?? 0) ? "bg-red-500" : "bg-white/20"}`}
-                />
-              ))}
-            </div>
+            <p className="font-mono text-red-300 uppercase tracking-widest text-xs truncate text-right">{rightPlayer?.username}</p>
+            <p className="text-xs font-mono text-white/50 text-right">Score: {rightScore}</p>
           </div>
         </div>
       )}
@@ -374,33 +384,58 @@ export default function Game3v3Arena() {
       )}
 
       {/* MATCH OVER */}
-      {arenaState === "MATCH_OVER" && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute inset-0 z-40 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(10px)" }}
-        >
+      {(() => {
+        if (arenaState !== "MATCH_OVER") return null;
+
+        const scoresSource = finalScores ?? match.players.reduce((acc, p) => ({ ...acc, [p.username]: p.score }), {} as Record<string, number>);
+        const maxScore = Math.max(...Object.values(scoresSource));
+        const winners = Object.keys(scoresSource).filter((name) => scoresSource[name] === maxScore);
+        const isSelfWinner = winners.includes(username);
+        const isDrawMatch = winners.length === Object.keys(scoresSource).length || Object.values(scoresSource).every((s) => s === maxScore);
+
+        let winnerText = "";
+        if (isDrawMatch) {
+          winnerText = "EMPATE GERAL!";
+        } else if (winners.length === 1) {
+          winnerText = winners[0] === username ? "VITÓRIA!" : `VENCEDOR: ${winners[0].toUpperCase()}`;
+        } else {
+          winnerText = `VENCEDORES: ${winners.join(" & ").toUpperCase()}`;
+        }
+
+        return (
           <motion.div
-            initial={{ scale: 0.8, y: 40 }}
-            animate={{ scale: 1, y: 0 }}
-            transition={{ type: "spring", bounce: 0.35, delay: 0.1 }}
-            className="flex flex-col items-center text-center p-10 border border-red-600/40 rounded-2xl bg-black/80 max-w-lg w-full mx-4"
-            style={{ boxShadow: "0 0 60px rgba(255,100,100,0.2)" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 z-45 flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(10px)" }}
           >
-            <h1 className="text-6xl font-black uppercase tracking-tighter mb-6 text-red-300">
-              Partida Finalizada
-            </h1>
-            <div className="w-full mb-8">
-              <div className="grid grid-cols-3 gap-4 text-center">
-                {match.players.map((p, idx) => (
-                  <div key={idx} className="flex flex-col items-center gap-2">
-                    <p className="text-2xl font-black text-red-300">{p.score}</p>
-                    <p className="text-xs uppercase font-mono text-white/60 truncate">{p.username}</p>
-                  </div>
-                ))}
+            <motion.div
+              initial={{ scale: 0.8, y: 40 }}
+              animate={{ scale: 1, y: 0 }}
+              transition={{ type: "spring", bounce: 0.35, delay: 0.1 }}
+              className="flex flex-col items-center text-center p-10 border border-red-600/40 rounded-2xl bg-black/80 max-w-lg w-full mx-4"
+              style={{ boxShadow: isSelfWinner && !isDrawMatch ? "0 0 60px rgba(6,182,212,0.2)" : "0 0 60px rgba(255,100,100,0.15)" }}
+            >
+              <h1 className={`text-5xl font-black uppercase tracking-tighter mb-2 ${isSelfWinner && !isDrawMatch ? "text-cyan-400 neon-text" : isDrawMatch ? "text-white/60" : "text-red-400"}`}>
+                {winnerText}
+              </h1>
+              <p className="font-mono text-white/40 uppercase tracking-widest text-xs mb-6">Partida Finalizada</p>
+
+              <div className="w-full mb-8">
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  {match.players.map((p, idx) => {
+                    const scoreVal = scoresSource[p.username] ?? p.score;
+                    const isWinner = winners.includes(p.username) && !isDrawMatch;
+                    return (
+                      <div key={idx} className="flex flex-col items-center gap-2 p-3 rounded-lg border border-white/5 bg-white/5">
+                        <p className={`text-2xl font-black ${isWinner ? "text-cyan-400" : "text-red-300"}`}>{scoreVal}</p>
+                        <p className="text-xs uppercase font-mono text-white/60 truncate max-w-[100px]">{p.username}</p>
+                        {isWinner && <span className="text-[10px] uppercase font-mono font-bold bg-cyan-950 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-800 animate-pulse">Vencedor</span>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
             <div className="flex gap-3 w-full">
               <Button
                 onClick={handleRestart}
@@ -418,9 +453,57 @@ export default function Game3v3Arena() {
                 Setup
               </Button>
             </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
+        );
+      })()}
+
+      {/* OPPONENT TEMPORARILY OFFLINE OVERLAY */}
+      <AnimatePresence>
+        {opponentOffline && arenaState !== "MATCH_OVER" && (
+          <motion.div
+            key="opp_offline"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
+          >
+            <div className="flex flex-col items-center text-center gap-6 p-10 border border-red-500/30 rounded-2xl bg-black/85 max-w-md mx-4 animate-pulse">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 border-4 border-red-500/20 rounded-full" />
+                <div className="absolute inset-0 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+              <h2 className="text-3xl font-black uppercase tracking-widest text-red-400 neon-text">Oponente Offline</h2>
+              <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                Um combatente perdeu a ligação.<br />Aguardando retorno em <span className="text-red-400 font-black text-xl">{offlineCountdown}s</span>...
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* SELF DISCONNECTED OVERLAY */}
+      <AnimatePresence>
+        {!connected && arenaState !== "MATCH_OVER" && (
+          <motion.div
+            key="self_offline"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.9)", backdropFilter: "blur(12px)" }}
+          >
+            <div className="flex flex-col items-center text-center gap-6 p-10 border border-red-500/40 rounded-2xl bg-black/90 max-w-md mx-4">
+              <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+              <h2 className="text-3xl font-black uppercase tracking-widest text-red-400 neon-text">Perda de Ligação</h2>
+              <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                Perdeste a ligação ao servidor.<br />A tentar restabelecer conexão...
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
