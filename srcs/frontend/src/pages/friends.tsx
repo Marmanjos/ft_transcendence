@@ -28,19 +28,19 @@ export default function Friends() {
   const [usernameInput, setUsernameInput] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Queries & Mutations
+  const { data: friendships, isLoading, refetch } = useListFriends({
+    query: { queryKey: ["/api/friends"] }
+  });
+
   useEffect(() => {
     const off = onMessage((msg: ServerMsg) => {
       if (msg.type === "FRIEND_UPDATE") {
-        queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+        refetch();
       }
     });
     return off;
-  }, [onMessage, queryClient]);
-
-  // Queries & Mutations
-  const { data: friendships, isLoading } = useListFriends({
-    query: { queryKey: ["/api/friends"] }
-  });
+  }, [onMessage, refetch]);
 
   const addFriendMutation = useAddFriend();
   const acceptFriendMutation = useAcceptFriend();
@@ -195,7 +195,11 @@ export default function Friends() {
                 <span className="flex items-center gap-2">
                   <ArrowDownLeft className="w-4 h-4" /> Recebidas
                 </span>
-                <span className="bg-background/80 border px-2 py-0.5 rounded text-[10px] font-mono text-foreground">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all duration-300 ${
+                  receivedRequests.length > 0
+                    ? "bg-red-600 text-white border border-red-500 font-black animate-pulse shadow-[0_0_10px_rgba(255,0,0,0.5)]"
+                    : "bg-background/80 border text-foreground"
+                }`}>
                   {receivedRequests.length}
                 </span>
               </button>

@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { BUILD_TAG } from "@/lib/build-tag";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useNotifications, type AppNotification } from "@/hooks/use-notifications";
+import { useListFriends } from "@workspace/api-client-react";
 
 declare global {
   interface Window {
@@ -103,10 +104,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const { send, onMessage } = useWs(token);
 
+  const { data: friendships, refetch: refetchFriends } = useListFriends({
+    query: { queryKey: ["/api/friends"], enabled: !!token }
+  });
+
+  const pendingCount = friendships?.filter(f => f.status === "REQUEST_RECEIVED").length ?? 0;
+
   // Apenas GAME_INVITE_RECEIVED continua como toast puro (não persiste)
   useEffect(() => {
     if (!token) return;
     const off = onMessage((msg) => {
+      if (msg.type === "FRIEND_UPDATE") {
+        refetchFriends();
+      }
       if (msg.type === "GAME_INVITE_RECEIVED") {
         toast({
           title: "Desafio Recebido! ⚔️",
@@ -126,7 +136,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       }
     });
     return off;
-  }, [token, onMessage, send, setLocation, toast]);
+  }, [token, onMessage, send, setLocation, toast, refetchFriends]);
 
   const isAuthPage = location === "/login" || location === "/register" || location === "/" || location.startsWith("/game");
   if (isAuthPage) {
@@ -162,8 +172,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Link href={`/profile/${user?.id}`} className={`text-sm font-medium transition-colors hover:text-primary ${location.startsWith("/profile") ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><User className="w-4 h-4" /> Perfil</span>
             </Link>
-            <Link href="/friends" className={`text-sm font-medium transition-colors hover:text-primary ${location === "/friends" ? "text-primary neon-text" : "text-muted-foreground"}`}>
+            <Link href="/friends" className={`text-sm font-medium transition-colors hover:text-primary flex items-center gap-2 ${location === "/friends" ? "text-primary neon-text" : "text-muted-foreground"}`}>
               <span className="flex items-center gap-2"><Users className="w-4 h-4" /> Amigos</span>
+              {pendingCount > 0 && (
+                <span className="min-w-[16px] h-[16px] bg-red-600 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 animate-pulse border border-red-500 shadow-[0_0_10px_rgba(255,0,0,0.5)]">
+                  {pendingCount}
+                </span>
+              )}
             </Link>
             <NotificationBell />
           </nav>
