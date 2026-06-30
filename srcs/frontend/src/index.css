@@ -202,3 +202,195 @@
     pointer-events: none;
   }
 }
+/* ============================================================
+   NEON BOXING RING — CSS puro, sem imagens/JS
+   Pensa nisto como um ringue "desenhado com luz":
+   - .ring-stage  → o palco em perspetiva (a câmara a olhar de cima/lado)
+   - .ring-floor  → a lona, um plano inclinado em 3D
+   - .ring-post   → os 4 postes, cilindros de luz que pulsam (como neon de bar)
+   - .ring-rope   → as cordas, linhas que "correm" com brilho (efeito shimmer)
+   - .ring-spark  → partículas a flutuar, como faíscas no ar
+   ============================================================ */
+ 
+.neon-ring-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 60%, #0d0d2b 0%, #0a0a1a 60%, #050510 100%);
+}
+ 
+/* Palco 3D: dá perspetiva ao ringue, como se a câmara estivesse
+   ligeiramente acima e a olhar para baixo — tal como numa transmissão de boxe */
+.ring-stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(90vw, 1100px);
+  height: min(70vh, 650px);
+  transform: translate(-50%, -45%) perspective(1200px) rotateX(48deg);
+  transform-style: preserve-3d;
+}
+ 
+/* A lona do ringue — um plano com leve textura/grelha */
+.ring-floor {
+  position: absolute;
+  inset: 6%;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 255, 255, 0.035) 0px,
+      rgba(0, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 40px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 255, 255, 0.035) 0px,
+      rgba(0, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 40px
+    ),
+    radial-gradient(ellipse at center, rgba(168, 85, 247, 0.08) 0%, transparent 70%);
+  border: 1px solid rgba(0, 255, 255, 0.15);
+  border-radius: 4px;
+}
+ 
+/* ---------- Cordas (3 níveis, como num ringue real) ---------- */
+.ring-ropes {
+  position: absolute;
+  inset: 6%;
+}
+ 
+.ring-rope {
+  position: absolute;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 255, 255, 0.9) 15%,
+    rgba(168, 85, 247, 0.9) 50%,
+    rgba(0, 255, 255, 0.9) 85%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  box-shadow:
+    0 0 6px rgba(0, 255, 255, 0.9),
+    0 0 14px rgba(0, 255, 255, 0.6),
+    0 0 24px rgba(168, 85, 247, 0.4);
+  animation: rope-shimmer 4s linear infinite;
+}
+ 
+/* Horizontais (topo/baixo) — 3 alturas cada lado, simulando as 3 cordas */
+.ring-rope.h {
+  left: -2%;
+  right: -2%;
+  height: 2px;
+  border-radius: 2px;
+}
+.ring-rope.h.top-1   { top: -6%; }
+.ring-rope.h.top-2   { top: -2%; }
+.ring-rope.h.top-3   { top: 2%; }
+.ring-rope.h.bot-1   { bottom: -6%; }
+.ring-rope.h.bot-2   { bottom: -2%; }
+.ring-rope.h.bot-3   { bottom: 2%; }
+ 
+/* Verticais (esquerda/direita) */
+.ring-rope.v {
+  top: -2%;
+  bottom: -2%;
+  width: 2px;
+  border-radius: 2px;
+}
+.ring-rope.v.left-1  { left: -6%; }
+.ring-rope.v.left-2  { left: -2%; }
+.ring-rope.v.left-3  { left: 2%; }
+.ring-rope.v.right-1 { right: -6%; }
+.ring-rope.v.right-2 { right: -2%; }
+.ring-rope.v.right-3 { right: 2%; }
+ 
+@keyframes rope-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+ 
+/* ---------- Postes nos 4 cantos ---------- */
+.ring-post {
+  position: absolute;
+  width: 14px;
+  height: 130px;
+  border-radius: 7px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 255, 255, 0.95),
+    rgba(168, 85, 247, 0.85) 60%,
+    rgba(0, 255, 255, 0.95)
+  );
+  box-shadow:
+    0 0 10px rgba(0, 255, 255, 0.9),
+    0 0 24px rgba(0, 255, 255, 0.6),
+    0 0 40px rgba(168, 85, 247, 0.5);
+  transform: translateZ(40px) rotateX(-48deg);
+  transform-origin: bottom center;
+  animation: post-pulse 2.2s ease-in-out infinite;
+}
+ 
+.ring-post.tl { top: -10%; left: -8%; animation-delay: 0s; }
+.ring-post.tr { top: -10%; right: -8%; animation-delay: 0.5s; }
+.ring-post.bl { bottom: -10%; left: -8%; animation-delay: 1s; }
+.ring-post.br { bottom: -10%; right: -8%; animation-delay: 1.5s; }
+ 
+@keyframes post-pulse {
+  0%, 100% {
+    filter: brightness(1);
+    box-shadow:
+      0 0 10px rgba(0, 255, 255, 0.9),
+      0 0 24px rgba(0, 255, 255, 0.6),
+      0 0 40px rgba(168, 85, 247, 0.5);
+  }
+  50% {
+    filter: brightness(1.6);
+    box-shadow:
+      0 0 18px rgba(0, 255, 255, 1),
+      0 0 40px rgba(0, 255, 255, 0.9),
+      0 0 70px rgba(168, 85, 247, 0.8);
+  }
+}
+ 
+/* ---------- Faíscas / partículas a flutuar ---------- */
+.ring-spark {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: spark-float linear infinite;
+}
+ 
+@keyframes spark-float {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  10% { opacity: 0.9; }
+  50% {
+    transform: translateY(-120px) translateX(20px) scale(1.1);
+    opacity: 0.6;
+  }
+  90% { opacity: 0.2; }
+  100% {
+    transform: translateY(-260px) translateX(-10px) scale(0.5);
+    opacity: 0;
+  }
+}
+ 
+/* Vinheta para garantir legibilidade do texto por cima */
+.ring-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 45%, transparent 0%, rgba(5, 5, 16, 0.55) 70%),
+    linear-gradient(to top, rgba(5, 5, 16, 0.85), transparent 35%, transparent 65%, rgba(5, 5, 16, 0.6));
+}
+ 
+@media (max-width: 640px) {
+  .ring-stage { height: 50vh; }
+  .ring-post { height: 80px; width: 10px; }
+}
