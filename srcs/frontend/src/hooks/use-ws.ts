@@ -9,27 +9,36 @@ export type ServerMsg =
   | { type: "REMATCH_OFFERED" }
   | { type: "REMATCH_WAITING" }
   | { type: "OPPONENT_DISCONNECTED" }
-  | { type: "ROOM_CREATED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
-  | { type: "ROOM_JOINED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
-  | { type: "ROOM_UPDATED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_CREATED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_JOINED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_UPDATED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
   | { type: "ROOM_CHAT"; code: string; id: string; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ROOM_PLAYER_LEFT"; code: string; username: string }
   | { type: "ROOM_CLOSED"; code: string; reason: "host_left" | "closed" }
   | { type: "ROOM_FULL"; code: string }
   | { type: "ROOM_NOT_FOUND"; code: string }
+  | { type: "GAME_INVITE_RECEIVED"; fromUsername: string; roomCode: string }
+  | { type: "FRIEND_UPDATE"; reason: "REQUEST_RECEIVED" | "REQUEST_ACCEPTED" | "REMOVED"; fromUsername?: string }
+  | { type: "OPPONENT_TEMPORARILY_DISCONNECTED" }
+  | { type: "OPPONENT_RECONNECTED" }
+  | { type: "ORG_MESSAGE"; organizationId: number; id: number; senderId: number; senderUsername: string; text: string; createdAt: string }
+  | { type: "ORG_INVITE_RECEIVED"; organizationId: number }
   | { type: "ERROR"; message: string }
-  | { type: "PONG" };
+  | { type: "PONG" }
+  | { type: "NOTIFICATION"; id: number; notifType: string; payload: unknown; createdAt: string };
 
 export type ClientMsg =
   | { type: "JOIN_QUEUE" }
   | { type: "LEAVE_QUEUE" }
   | { type: "SUBMIT_CHOICE"; matchId: number; elemental: string }
   | { type: "OFFER_REMATCH"; matchId: number }
-  | { type: "CREATE_ROOM" }
+  | { type: "CREATE_ROOM"; mode?: "1v1" | "3v3" }
   | { type: "JOIN_ROOM"; code: string }
   | { type: "LEAVE_ROOM" }
   | { type: "SEND_ROOM_CHAT"; text: string }
-  | { type: "PING" };
+  | { type: "INVITE_TO_PLAY"; targetUserId: number }
+  | { type: "PING" }
+  | { type: "SYNC_MATCH"; matchId: number };
 
 type MsgHandler = (msg: ServerMsg) => void;
 
@@ -49,39 +58,58 @@ export function useWs(token: string | null) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) return undefined;
 
     const url = createWsUrl(token);
+    let reconnectTimeoutId: NodeJS.Timeout | null = null;
+    let ws: WebSocket | null = null;
+    let isCleanup = false;
 
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    function connect() {
+      if (isCleanup) return;
 
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => {
-      setConnected(false);
-      wsRef.current = null;
-    };
-    ws.onerror = () => {
-      setConnected(false);
-    };
-    ws.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data as string) as ServerMsg;
-        handlersRef.current.forEach((h) => h(msg));
-      } catch {
-        // ignore malformed
-      }
-    };
+      ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setConnected(true);
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        wsRef.current = null;
+        if (!isCleanup) {
+          reconnectTimeoutId = setTimeout(connect, 2000);
+        }
+      };
+
+      ws.onerror = () => {
+        setConnected(false);
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data as string) as ServerMsg;
+          handlersRef.current.forEach((h) => h(msg));
+        } catch {
+          // ignore malformed
+        }
+      };
+    }
+
+    connect();
 
     const pingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "PING" }));
       }
     }, 25000);
 
     return () => {
+      isCleanup = true;
       clearInterval(pingInterval);
-      ws.close();
+      if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+      if (ws) ws.close();
     };
   }, [token]);
 

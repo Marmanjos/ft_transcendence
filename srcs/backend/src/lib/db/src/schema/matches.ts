@@ -12,6 +12,7 @@ export const matchesTable = pgTable("matches", {
   winnerId: integer("winner_id").references(() => usersTable.id),
   player1Score: integer("player1_score").notNull().default(0),
   player2Score: integer("player2_score").notNull().default(0),
+  aiDifficulty: text("ai_difficulty").notNull().default("MEDIUM"), // EASY | MEDIUM | HARD
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });

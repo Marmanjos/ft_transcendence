@@ -1,14 +1,24 @@
 import { useLocation, Link } from "wouter";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGetArenaSummary, useListMatches, useGetLeaderboard, useCreateMatch } from "@workspace/api-client-react";
 import { MatchMode, MatchStatus } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Swords, Activity, Trophy, Bot, Globe, History } from "lucide-react";
+import { loadRoomSession } from "@/lib/room-session";
 
 export default function Lobby() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [difficulty, setDifficulty] = useState<"EASY" | "MEDIUM" | "HARD">("MEDIUM");
+  
+  const persistedRoom = loadRoomSession();
+  useEffect(() => {
+    if (persistedRoom) {
+      setLocation(`${persistedRoom.path}?code=${encodeURIComponent(persistedRoom.code)}`);
+    }
+  }, [persistedRoom, setLocation]);
   
   const { data: summary } = useGetArenaSummary();
   const { data: matches } = useListMatches({ limit: 5 });
@@ -18,7 +28,12 @@ export default function Lobby() {
 
   const handlePlayAI = async () => {
     try {
-      const match = await createMatch.mutateAsync({ data: { mode: MatchMode.SINGLE_PLAYER } });
+      const match = await createMatch.mutateAsync({ 
+        data: { 
+          mode: MatchMode.SINGLE_PLAYER,
+          aiDifficulty: difficulty 
+        } 
+      });
       setLocation(`/game?matchId=${match.id}`);
     } catch (error) {
       toast({
@@ -36,7 +51,32 @@ export default function Lobby() {
           <h1 className="text-4xl font-black uppercase tracking-widest text-primary neon-text">Terminal da Arena</h1>
           <p className="text-muted-foreground font-mono mt-1">Conectado à rede global de duelos.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center justify-between gap-2 bg-card/50 border border-primary/20 p-2 rounded-xl backdrop-blur h-14 px-4">
+            <span className="text-xs font-mono font-bold uppercase tracking-widest text-primary/80 mr-2 hidden sm:inline">IA:</span>
+            <div className="flex gap-1">
+              {(["EASY", "MEDIUM", "HARD"] as const).map((diff) => (
+                <Button
+                  key={diff}
+                  size="sm"
+                  variant={difficulty === diff ? "default" : "ghost"}
+                  onClick={() => setDifficulty(diff)}
+                  className={`h-8 font-bold text-[10px] uppercase tracking-wider px-2.5 transition-all ${
+                    difficulty === diff
+                      ? diff === "EASY"
+                        ? "bg-emerald-500 hover:bg-emerald-600 text-black font-black neon-box"
+                        : diff === "MEDIUM"
+                        ? "bg-amber-500 hover:bg-amber-600 text-black font-black neon-box"
+                        : "bg-destructive hover:bg-destructive/80 text-white font-black neon-box"
+                      : "text-muted-foreground hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {diff === "EASY" ? "Fácil" : diff === "MEDIUM" ? "Médio" : "Difícil"}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <Button
             size="lg"
             onClick={handlePlayAI}
@@ -52,8 +92,17 @@ export default function Lobby() {
             onClick={() => setLocation("/room")}
             className="h-14 px-6 text-base font-bold uppercase tracking-widest border-secondary/50 text-secondary hover:bg-secondary/10 hover:border-secondary w-full sm:w-auto"
           >
-            <Globe className="w-5 h-5 mr-2" />
-            Salas Online
+            <Swords className="w-5 h-5 mr-2" />
+            1v1 PvP
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={() => setLocation("/game/3v3")}
+            className="h-14 px-6 text-base font-bold uppercase tracking-widest border-destructive/50 text-destructive hover:bg-destructive/10 hover:border-destructive w-full sm:w-auto"
+          >
+            <Swords className="w-5 h-5 mr-2" />
+            3v3 PvP
           </Button>
         </div>
       </div>
@@ -114,8 +163,18 @@ export default function Lobby() {
                     </div>
                     <div className="text-right">
                       <p className="font-black text-lg tracking-widest">{match.player1Score} - {match.player2Score}</p>
-                      <span className={`text-xs uppercase font-mono px-2 py-1 rounded ${match.status === MatchStatus.COMPLETED ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                        {match.status === MatchStatus.COMPLETED ? 'FINALIZADO' : 'EM ANDAMENTO'}
+                      <span className={`text-xs uppercase font-mono px-2 py-1 rounded ${
+                        match.status === MatchStatus.COMPLETED
+                          ? 'bg-primary/20 text-primary'
+                          : match.status === MatchStatus.ABANDONED
+                          ? 'bg-destructive/20 text-destructive/80 line-through'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {match.status === MatchStatus.COMPLETED
+                          ? 'FINALIZADO'
+                          : match.status === MatchStatus.ABANDONED
+                          ? 'ABANDONADO'
+                          : 'EM ANDAMENTO'}
                       </span>
                     </div>
                   </div>

@@ -25,6 +25,7 @@ function formatMatch(match: typeof matchesTable.$inferSelect, p1Username?: strin
     winnerId: match.winnerId ?? null,
     player1Score: match.player1Score,
     player2Score: match.player2Score,
+    aiDifficulty: match.aiDifficulty,
     createdAt: match.createdAt.toISOString(),
     completedAt: match.completedAt ? match.completedAt.toISOString() : null,
   };
@@ -80,6 +81,7 @@ router.post("/matches", requireAuth, async (req, res): Promise<void> => {
     .values({
       player1Id: req.user!.userId,
       mode: parsed.data.mode,
+      aiDifficulty: parsed.data.aiDifficulty ?? "MEDIUM",
       status: "ACTIVE",
       player1Score: 0,
       player2Score: 0,
@@ -178,27 +180,11 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
   }
 
   const player1Choice = parsed.data.elemental as Elemental;
-
-// Buscar histórico e escolher a jogada da IA
-let player2Choice: Elemental;
-if (match.mode === "SINGLE_PLAYER") {
-  // Busca as rodadas anteriores
-  const previousRounds = await db
-    .select()
-    .from(roundsTable)
-    .where(eq(roundsTable.matchId, match.id))
-    .orderBy(roundsTable.roundNumber);
-  
-  // Extrai as escolhas do jogador
-  const playerHistory = previousRounds.map(round => round.player1Choice as Elemental);
-  
-  // IA escolhe com base no histórico
-  player2Choice = getAiChoice(playerHistory);
-} else {
-  player2Choice = player1Choice; // Multijogador (não usado aqui)
-}
-
-const outcome = resolveRound(player1Choice, player2Choice);
+  const previousPlayerChoices = existingRounds.map(r => r.player1Choice as Elemental);
+  const player2Choice = match.mode === "SINGLE_PLAYER" 
+    ? getAiChoice(match.aiDifficulty, previousPlayerChoices) 
+    : player1Choice;
+  const outcome = resolveRound(player1Choice, player2Choice);
 
   const [round] = await db
     .insert(roundsTable)
@@ -254,6 +240,40 @@ const outcome = resolveRound(player1Choice, player2Choice);
     outcome: round.outcome,
     createdAt: round.createdAt.toISOString(),
   });
+});
+
+router.post("/matches/:id/abandon", requireAuth, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [match] = await db
+    .select()
+    .from(matchesTable)
+    .where(and(eq(matchesTable.id, params.data.id), eq(matchesTable.player1Id, req.user!.userId)))
+    .limit(1);
+
+  if (!match) {
+    res.status(404).json({ error: "Partida não encontrada" });
+    return;
+  }
+
+  if (match.status !== "ACTIVE") {
+    res.status(400).json({ error: "Partida já finalizada" });
+    return;
+  }
+
+  await db
+    .update(matchesTable)
+    .set({
+      status: "ABANDONED",
+      completedAt: new Date(),
+    })
+    .where(eq(matchesTable.id, match.id));
+
+  res.json({ success: true, message: "Partida abandonada com sucesso" });
 });
 
 export default router;

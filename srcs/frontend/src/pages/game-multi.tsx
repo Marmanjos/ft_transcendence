@@ -11,6 +11,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useWs, type ServerMsg } from "@/hooks/use-ws";
 import { Pause } from "lucide-react";
 
+declare global {
+  interface Window {
+    isMatchActive?: boolean;
+  }
+}
+
 type MultiState =
   | "CONNECTING"
   | "QUEUING"
@@ -53,7 +59,10 @@ export default function GameMulti() {
   const [scores, setScores] = useState({ player1Score: 0, player2Score: 0 });
   const [errorMsg, setErrorMsg] = useState("");
   const [paused, setPaused] = useState(false);
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const [clashAnimating, setClashAnimating] = useState(false);
+  const [opponentOffline, setOpponentOffline] = useState(false);
+  const [offlineCountdown, setOfflineCountdown] = useState(8);
 
   const { send, onMessage, connected } = useWs(token);
 
@@ -63,6 +72,41 @@ export default function GameMulti() {
       send({ type: "JOIN_QUEUE" });
     }
   }, [connected, send]);
+
+  useEffect(() => {
+    const isPlaying = matchInfo && state !== "MATCH_OVER" && state !== "OPPONENT_DISCONNECTED" && state !== "ERROR";
+    if (isPlaying) {
+      window.isMatchActive = true;
+    } else {
+      window.isMatchActive = false;
+    }
+    return () => {
+      window.isMatchActive = false;
+    };
+  }, [matchInfo, state]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const isPlaying = matchInfo && state !== "MATCH_OVER" && state !== "OPPONENT_DISCONNECTED" && state !== "ERROR";
+      if (isPlaying && window.isMatchActive) {
+        e.preventDefault();
+        window.history.pushState(null, "", window.location.href);
+        setShowAbandonConfirm(true);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [matchInfo, state]);
+
+  const handleConfirmAbandon = () => {
+    window.isMatchActive = false;
+    setShowAbandonConfirm(false);
+    if (matchInfo) {
+      send({ type: "ABANDON_MATCH", matchId: matchInfo.matchId });
+    }
+    send({ type: "LEAVE_QUEUE" });
+    setLocation("/lobby");
+  };
 
   useEffect((): (() => void) => {
     const off = onMessage((msg: ServerMsg) => {
@@ -77,6 +121,7 @@ export default function GameMulti() {
           setRoundResult(null);
           setSelectedElemental(null);
           setMatchOver(null);
+          setOpponentOffline(false);
           setState("MATCH_FOUND");
           setTimeout(() => setState("SELECTING"), 2500);
           break;
@@ -121,8 +166,18 @@ export default function GameMulti() {
           setState("REMATCH_WAITING");
           break;
 
+        case "OPPONENT_TEMPORARILY_DISCONNECTED":
+          setOpponentOffline(true);
+          setOfflineCountdown(8);
+          break;
+
+        case "OPPONENT_RECONNECTED":
+          setOpponentOffline(false);
+          break;
+
         case "OPPONENT_DISCONNECTED":
           setState("OPPONENT_DISCONNECTED");
+          setOpponentOffline(false);
           break;
 
         case "ERROR":
@@ -133,6 +188,15 @@ export default function GameMulti() {
     });
     return off;
   }, [onMessage, matchInfo]);
+
+  useEffect(() => {
+    if (!opponentOffline) return undefined;
+    if (offlineCountdown <= 0) return undefined;
+    const interval = setInterval(() => {
+      setOfflineCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [opponentOffline, offlineCountdown]);
 
   const handleSelect = (elemental: Elemental) => {
     if (state !== "SELECTING" || !matchInfo || paused) return;
@@ -281,17 +345,16 @@ export default function GameMulti() {
                   <AnimatePresence mode="wait">
                     {selectedElemental ? (
                       <motion.div key={`you-${selectedElemental}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                        <ElementalAvatar elemental={selectedElemental} side="left" size={150}
-                          animate={clashAnimating ? "attack" : "idle"} />
+                        <ElementalCard type={selectedElemental} size="lg" disabled />
                       </motion.div>
                     ) : roundResult ? (
                       <motion.div key={`you-result-${roundResult.yourChoice}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                        <ElementalAvatar elemental={roundResult.yourChoice} side="left" size={150} animate="idle" />
+                        <ElementalCard type={roundResult.yourChoice} size="lg" disabled />
                       </motion.div>
                     ) : (
                       <motion.div key="you-placeholder" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                        <div style={{ width: 150, height: 218 }} className="flex items-center justify-center">
-                          <div className="w-20 h-28 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center">
+                        <div style={{ width: 256, height: 320 }} className="flex items-center justify-center">
+                          <div className="w-56 h-72 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center">
                             <p className="font-mono text-primary/30 text-xs uppercase tracking-widest text-center">Escolha</p>
                           </div>
                         </div>
@@ -333,20 +396,23 @@ export default function GameMulti() {
                   <AnimatePresence mode="wait">
                     {state === "WAITING" && selectedElemental ? (
                       <motion.div key="opp-waiting" initial={{ opacity: 0 }} animate={{ opacity: 0.5 }}>
-                        <div style={{ width: 150, height: 218 }} className="flex items-center justify-center">
-                          <div className="w-20 h-28 rounded-xl border-2 border-dashed border-destructive/20 flex items-center justify-center">
+                        <div style={{ width: 256, height: 320 }} className="flex items-center justify-center">
+                          <div className="w-56 h-72 rounded-xl border-2 border-dashed border-destructive/20 flex items-center justify-center">
                             <div className="w-5 h-5 border-2 border-destructive/40 border-t-transparent rounded-full animate-spin" />
                           </div>
                         </div>
                       </motion.div>
                     ) : roundResult ? (
                       <motion.div key={`opp-${roundResult.opponentChoice}`} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                        <ElementalAvatar elemental={roundResult.opponentChoice} side="right" size={150}
-                          animate={clashAnimating ? "attack" : "idle"} />
+                        <ElementalCard type={roundResult.opponentChoice} size="lg" disabled />
                       </motion.div>
                     ) : (
                       <motion.div key="opp-placeholder" initial={{ opacity: 0 }} animate={{ opacity: 0.6 }}>
-                        <ElementalAvatar elemental={Elemental.WRAITH} side="right" size={150} faded />
+                        <div style={{ width: 256, height: 320 }} className="flex items-center justify-center opacity-40">
+                          <div className="w-56 h-72 rounded-xl border-2 border-dashed border-white/20 flex items-center justify-center">
+                            <p className="font-mono text-white/20 text-xs uppercase tracking-widest text-center">Aguardando</p>
+                          </div>
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -393,7 +459,7 @@ export default function GameMulti() {
 
                 {roundResult && (
                   <div className="mb-4">
-                    <ElementalAvatar elemental={roundResult.yourChoice} side="left" size={110} animate="idle" />
+                    <ElementalCard type={roundResult.yourChoice} size="md" disabled />
                   </div>
                 )}
 
@@ -410,21 +476,15 @@ export default function GameMulti() {
                   <span className="text-destructive">{opponentScore}</span>
                 </div>
 
-                <div className="flex flex-col gap-3 w-full">
+                <div className="flex gap-3 w-full">
                   <Button onClick={handleOfferRematch} size="lg"
-                    className="w-full h-12 font-bold uppercase tracking-widest neon-box">
-                    Revanche
+                    className="flex-1 h-12 font-bold uppercase tracking-widest neon-box">
+                    Jogar Novamente
                   </Button>
-                  <div className="flex gap-3">
-                    <Button onClick={() => { send({ type: "JOIN_QUEUE" }); setState("QUEUING"); setMatchInfo(null); setMatchOver(null); }}
-                      variant="outline" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest">
-                      Nova Partida
-                    </Button>
-                    <Button onClick={() => setLocation("/lobby")} variant="ghost" size="lg"
-                      className="flex-1 h-12 font-bold uppercase tracking-widest text-white/50">
-                      Lobby
-                    </Button>
-                  </div>
+                  <Button onClick={() => setLocation("/lobby")} variant="outline" size="lg"
+                    className="flex-1 h-12 font-bold uppercase tracking-widest">
+                    Sair da Sala
+                  </Button>
                 </div>
               </motion.div>
             </motion.div>
@@ -482,6 +542,39 @@ export default function GameMulti() {
             </motion.div>
           )}
 
+          {/* OPPONENT TEMPORARILY OFFLINE */}
+          {inArena && opponentOffline && state !== "OPPONENT_DISCONNECTED" && (
+            <motion.div key="opp_offline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 flex items-center justify-center p-4"
+              style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
+              <div className="flex flex-col items-center text-center gap-6 p-10 border border-destructive/30 rounded-2xl bg-card/80 max-w-md mx-4 animate-pulse">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 border-4 border-destructive/20 rounded-full" />
+                  <div className="absolute inset-0 border-4 border-destructive border-t-transparent rounded-full animate-spin" />
+                </div>
+                <h2 className="text-3xl font-black uppercase tracking-widest text-destructive neon-text">Oponente Offline</h2>
+                <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                  O adversário perdeu a ligação.<br />Aguardando retorno em <span className="text-destructive font-black text-xl">{offlineCountdown}s</span>...
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* SELF DISCONNECTED */}
+          {inArena && !connected && (
+            <motion.div key="self_offline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: "rgba(0,0,0,0.9)", backdropFilter: "blur(12px)" }}>
+              <div className="flex flex-col items-center text-center gap-6 p-10 border border-primary/40 rounded-2xl bg-card/80 max-w-md mx-4">
+                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                <h2 className="text-3xl font-black uppercase tracking-widest text-primary neon-text">Perda de Ligação</h2>
+                <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                  Perdeste a ligação ao servidor.<br />A tentar restabelecer conexão...
+                </p>
+              </div>
+            </motion.div>
+          )}
+
           {/* ERROR */}
           {state === "ERROR" && (
             <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -505,9 +598,53 @@ export default function GameMulti() {
         {paused && (
           <PauseMenu
             onResume={() => setPaused(false)}
-            onRestart={() => { send({ type: "LEAVE_QUEUE" }); window.location.reload(); }}
-            onMainMenu={() => setLocation("/")}
+            onRestart={() => {
+              window.isMatchActive = false;
+              if (matchInfo) {
+                send({ type: "ABANDON_MATCH", matchId: matchInfo.matchId });
+              }
+              send({ type: "LEAVE_QUEUE" });
+              window.location.reload();
+            }}
+            onAbandon={handleConfirmAbandon}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── ABANDON CONFIRM MODAL ── */}
+      <AnimatePresence>
+        {showAbandonConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          >
+            <div className="flex flex-col items-center text-center p-10 border border-destructive/30 rounded-2xl bg-card max-w-sm w-full mx-4"
+              style={{ boxShadow: "0 0 60px rgba(255,0,0,0.15)" }}>
+              <div className="text-[10px] font-mono text-destructive uppercase tracking-[0.4em] mb-2">Alerta de Saída</div>
+              <h2 className="text-2xl font-black uppercase text-destructive mb-4">Abandonar Duelo?</h2>
+              <p className="font-mono text-xs text-white/50 mb-8 uppercase leading-relaxed">
+                Ação de navegação detectada. Sair agora irá registrar uma derrota por abandono.
+              </p>
+              <div className="flex flex-col gap-3 w-full">
+                <Button
+                  onClick={handleConfirmAbandon}
+                  className="w-full h-12 text-sm font-bold uppercase tracking-widest bg-destructive hover:bg-destructive/80 text-white"
+                  style={{ boxShadow: "0 0 20px rgba(255,0,0,0.3)" }}
+                >
+                  Confirmar Abandono
+                </Button>
+                <Button
+                  onClick={() => setShowAbandonConfirm(false)}
+                  variant="outline"
+                  className="w-full h-12 text-sm font-bold uppercase tracking-widest border-muted-foreground/30 text-white bg-transparent"
+                >
+                  Voltar ao Jogo
+                </Button>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

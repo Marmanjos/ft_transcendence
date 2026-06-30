@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, ChevronUp, Copy, LogIn, MessageSquare, Plus, Send, Users } from "lucide-react";
 import { Elemental } from "@workspace/api-client-react";
@@ -10,6 +10,9 @@ import { ElementalCard } from "@/components/elemental-card";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useWs, type ServerMsg } from "@/hooks/use-ws";
+import { clearRoomSession, loadRoomSession, saveRoomSession } from "@/lib/room-session";
+
+const ROOM_PATH = "/room" as const;
 
 interface RoomState {
   code: string;
@@ -52,8 +55,21 @@ export default function RoomPage() {
   const { toast } = useToast();
   const { send, onMessage, connected } = useWs(token);
 
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialCode = searchParams.get("code")?.trim().toUpperCase() ?? "";
+  const persistedRoom = loadRoomSession();
+  const initialRoomCode = initialCode || (persistedRoom?.path === ROOM_PATH ? persistedRoom.code : "");
+  const autoJoinSent = useRef(false);
+
+  useEffect(() => {
+    if (persistedRoom && persistedRoom.path !== ROOM_PATH) {
+      setLocation(`${persistedRoom.path}?code=${encodeURIComponent(persistedRoom.code)}`);
+    }
+  }, [persistedRoom, setLocation]);
+
   const [roomState, setRoomState] = useState<RoomState | null>(null);
-  const [roomCode, setRoomCode] = useState("");
+  const [activeRoomCode, setActiveRoomCode] = useState(initialRoomCode);
+  const [roomCode, setRoomCode] = useState(initialCode);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -66,9 +82,15 @@ export default function RoomPage() {
   const [scores, setScores] = useState({ player1Score: 0, player2Score: 0 });
   const [errorMsg, setErrorMsg] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [opponentOffline, setOpponentOffline] = useState(false);
+  const [offlineCountdown, setOfflineCountdown] = useState(8);
+  const [gameMode, setGameMode] = useState<"CLASSIC" | "HYPER">("CLASSIC");
+  const [roomSize, setRoomSize] = useState<"1v1" | "3v3">("1v1");
 
   const isArena = Boolean(matchInfo);
   const canChat = Boolean(roomState?.canChat);
+  const roomViewActive = roomState !== null || activeRoomCode !== "";
+  const roomViewCode = roomState?.code ?? activeRoomCode;
   const yourScore = matchInfo?.yourSide === "player1" ? scores.player1Score : scores.player2Score;
   const opponentScore = matchInfo?.yourSide === "player1" ? scores.player2Score : scores.player1Score;
   const isWinner = matchOver ? (matchInfo?.yourSide === "player1" ? matchOver.winnerId === user?.id : matchOver.winnerId === user?.id) : false;
@@ -92,7 +114,11 @@ export default function RoomPage() {
             canChat: msg.canChat,
             matchId: msg.matchId,
           });
-          setBusy(false);
+          setActiveRoomCode(msg.code);
+          saveRoomSession({ code: msg.code, path: ROOM_PATH });
+          if (window.location.pathname !== ROOM_PATH || window.location.search !== `?code=${encodeURIComponent(msg.code)}`) {
+            setLocation(`${ROOM_PATH}?code=${encodeURIComponent(msg.code)}`);
+          }
           if (msg.matchId && msg.guestUsername) {
             const yourSide = msg.hostUsername === user?.username ? "player1" : "player2";
             const opponentUsername = yourSide === "player1" ? msg.guestUsername : msg.hostUsername;
@@ -107,8 +133,9 @@ export default function RoomPage() {
             toast({ title: "Partida pronta", description: `${opponentUsername} entrou na arena.` });
             setTimeout(() => setArenaState("SELECTING"), 1200);
           } else {
-            setStatus(msg.type === "ROOM_CREATED" ? "creating" : isArena ? "arena" : "joining");
+            setStatus(msg.type === "ROOM_CREATED" ? "creating" : "idle");
           }
+          setBusy(false);
           break;
         case "MATCH_FOUND":
           setMatchInfo({ matchId: msg.matchId, opponentUsername: msg.opponentUsername, yourSide: msg.yourSide });
@@ -148,8 +175,16 @@ export default function RoomPage() {
         case "REMATCH_WAITING":
           setArenaState("REMATCH_WAITING");
           break;
+        case "OPPONENT_TEMPORARILY_DISCONNECTED":
+          setOpponentOffline(true);
+          setOfflineCountdown(8);
+          break;
+        case "OPPONENT_RECONNECTED":
+          setOpponentOffline(false);
+          break;
         case "OPPONENT_DISCONNECTED":
           setArenaState("OPPONENT_DISCONNECTED");
+          setOpponentOffline(false);
           break;
         case "ROOM_CHAT":
           setMessages((current) => {
@@ -169,6 +204,8 @@ export default function RoomPage() {
           break;
         case "ROOM_CLOSED":
           setRoomState(null);
+          setActiveRoomCode("");
+          clearRoomSession();
           setMessages([]);
           setMatchInfo(null);
           setSelectedElemental(null);
@@ -179,14 +216,22 @@ export default function RoomPage() {
           setStatus("idle");
           setBusy(false);
           setChatOpen(false);
+          setLocation(ROOM_PATH);
           toast({ title: "Sala fechada", description: "A sala foi encerrada pelo host.", variant: "destructive" });
           break;
         case "ROOM_FULL":
           setBusy(false);
+          setActiveRoomCode("");
+          clearRoomSession();
           toast({ title: "Sala cheia", description: `O código ${msg.code} já tem dois jogadores.`, variant: "destructive" });
           break;
         case "ROOM_NOT_FOUND":
           setBusy(false);
+          setActiveRoomCode("");
+          clearRoomSession();
+          if (initialRoomCode === msg.code) {
+            setLocation(ROOM_PATH);
+          }
           toast({ title: "Sala não encontrada", description: `Nenhuma sala com o código ${msg.code}.`, variant: "destructive" });
           break;
         case "ERROR":
@@ -200,21 +245,42 @@ export default function RoomPage() {
     return () => {
       off();
     };
-  }, [isArena, matchInfo?.yourSide, onMessage, toast, user?.username]);
+  }, [initialRoomCode, matchInfo?.yourSide, onMessage, setLocation, toast, user?.username]);
+
+  useEffect(() => {
+    if (autoJoinSent.current) return;
+    if (!connected || !initialRoomCode) return;
+    autoJoinSent.current = true;
+    setRoomCode(initialRoomCode);
+    setStatus("joining");
+    setBusy(true);
+    send({ type: "JOIN_ROOM", code: initialRoomCode });
+  }, [connected, initialRoomCode, send]);
+
+  useEffect(() => {
+    if (!opponentOffline) return undefined;
+    if (offlineCountdown <= 0) return undefined;
+    const interval = setInterval(() => {
+      setOfflineCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [opponentOffline, offlineCountdown]);
 
   const sortedMessages = useMemo(() => messages, [messages]);
 
   const handleCreateRoom = () => {
+    if (roomViewActive) return;
     if (!connected) {
       toast({ title: "Sem conexão", description: "Conecta ao servidor primeiro.", variant: "destructive" });
       return;
     }
     setBusy(true);
     setStatus("creating");
-    send({ type: "CREATE_ROOM" });
+    send({ type: "CREATE_ROOM", mode: "1v1" });
   };
 
   const handleJoinRoom = () => {
+    if (roomViewActive) return;
     const code = roomCode.trim().toUpperCase();
     if (!code) {
       toast({ title: "Código necessário", description: "Introduz o código da sala.", variant: "destructive" });
@@ -230,9 +296,9 @@ export default function RoomPage() {
   };
 
   const handleCopyCode = async () => {
-    if (!roomState?.code) return;
-    await navigator.clipboard.writeText(roomState.code);
-    toast({ title: "Código copiado", description: roomState.code });
+    if (!roomViewCode) return;
+    await navigator.clipboard.writeText(roomViewCode);
+    toast({ title: "Código copiado", description: roomViewCode });
   };
 
   const handleSendChat = () => {
@@ -245,6 +311,8 @@ export default function RoomPage() {
   const handleLeaveRoom = () => {
     send({ type: "LEAVE_ROOM" });
     setRoomState(null);
+    setActiveRoomCode("");
+    clearRoomSession();
     setMatchInfo(null);
     setMessages([]);
     setDraft("");
@@ -255,6 +323,7 @@ export default function RoomPage() {
     setArenaState("MATCH_FOUND");
     setStatus("idle");
     setChatOpen(false);
+    setLocation(ROOM_PATH);
   };
 
   const handleSelect = (elemental: Elemental) => {
@@ -329,7 +398,17 @@ export default function RoomPage() {
               <motion.div key="arena" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col gap-8 justify-between">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                   <div className="lg:col-span-1 flex flex-col items-center gap-2">
-                    <ElementalAvatar elemental={roundResult?.yourChoice ?? selectedElemental ?? Elemental.WRAITH} side="left" size={150} animate={arenaState === "WAITING" ? "idle" : "idle"} />
+                    {selectedElemental ? (
+                      <ElementalCard type={selectedElemental} size="lg" disabled />
+                    ) : roundResult?.yourChoice ? (
+                      <ElementalCard type={roundResult.yourChoice} size="lg" disabled />
+                    ) : (
+                      <div style={{ width: 256, height: 320 }} className="flex items-center justify-center">
+                        <div className="w-56 h-72 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center">
+                          <p className="font-mono text-primary/30 text-xs uppercase tracking-widest text-center">Escolha</p>
+                        </div>
+                      </div>
+                    )}
                     <p className="font-mono text-primary text-xs uppercase tracking-widest">{user?.username}</p>
                     {roundResult && <p className="text-xs font-bold text-white/50 uppercase">{roundResult.yourChoice}</p>}
                   </div>
@@ -358,7 +437,21 @@ export default function RoomPage() {
                   </div>
 
                   <div className="lg:col-span-1 flex flex-col items-center gap-2">
-                    <ElementalAvatar elemental={roundResult?.opponentChoice ?? Elemental.WRAITH} side="right" size={150} animate={arenaState === "WAITING" ? "idle" : "idle"} />
+                    {arenaState === "WAITING" && selectedElemental ? (
+                      <div style={{ width: 256, height: 320 }} className="flex items-center justify-center">
+                        <div className="w-56 h-72 rounded-xl border-2 border-dashed border-destructive/20 flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-destructive/40 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      </div>
+                    ) : roundResult?.opponentChoice ? (
+                      <ElementalCard type={roundResult.opponentChoice} size="lg" disabled />
+                    ) : (
+                      <div style={{ width: 256, height: 320 }} className="flex items-center justify-center opacity-40">
+                        <div className="w-56 h-72 rounded-xl border-2 border-dashed border-white/20 flex items-center justify-center">
+                          <p className="font-mono text-white/20 text-xs uppercase tracking-widest text-center">Aguardando</p>
+                        </div>
+                      </div>
+                    )}
                     <p className="font-mono text-destructive text-xs uppercase tracking-widest">{matchInfo.opponentUsername}</p>
                     {roundResult && <p className="text-xs font-bold text-white/50 uppercase">{roundResult.opponentChoice}</p>}
                   </div>
@@ -394,7 +487,7 @@ export default function RoomPage() {
           {arenaState === "MATCH_OVER" && matchOver && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
               <motion.div initial={{ scale: 0.8, y: 40 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", bounce: 0.3 }} className="flex flex-col items-center text-center p-10 border border-border rounded-2xl bg-card/80 max-w-lg w-full mx-4" style={{ boxShadow: isWinner ? "0 0 60px rgba(0,255,255,0.2)" : "0 0 60px rgba(255,50,50,0.1)" }}>
-                {roundResult && <div className="mb-4"><ElementalAvatar elemental={roundResult.yourChoice} side="left" size={110} animate="idle" /></div>}
+                {roundResult && <div className="mb-4"><ElementalCard type={roundResult.yourChoice} size="md" disabled /></div>}
                 <h1 className={`text-6xl font-black uppercase tracking-tighter mb-2 ${isWinner ? "text-primary neon-text" : isDraw ? "text-white/60" : "text-destructive"}`}>{isWinner ? "VITÓRIA" : isDraw ? "EMPATE" : "DERROTA"}</h1>
                 <p className="font-mono text-white/40 uppercase tracking-widest text-sm mb-2">Placar Final</p>
                 <div className="text-4xl font-black mb-8">
@@ -402,12 +495,13 @@ export default function RoomPage() {
                   <span className="text-white/30 mx-3">-</span>
                   <span className="text-destructive">{opponentScore}</span>
                 </div>
-                <div className="flex flex-col gap-3 w-full">
-                  <Button onClick={handleOfferRematch} size="lg" className="w-full h-12 font-bold uppercase tracking-widest neon-box">Revanche</Button>
-                  <div className="flex gap-3">
-                    <Button onClick={() => setLocation("/lobby")} variant="outline" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest">Lobby</Button>
-                    <Button onClick={handleLeaveRoom} variant="ghost" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest text-white/50">Sair da sala</Button>
-                  </div>
+                <div className="flex gap-3 w-full">
+                  <Button onClick={handleOfferRematch} size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest neon-box">
+                    Jogar Novamente
+                  </Button>
+                  <Button onClick={handleLeaveRoom} variant="outline" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest">
+                    Sair da Sala
+                  </Button>
                 </div>
               </motion.div>
             </motion.div>
@@ -449,6 +543,33 @@ export default function RoomPage() {
                 <h2 className="text-4xl font-black uppercase tracking-widest text-primary neon-text">Oponente saiu</h2>
                 <p className="font-mono text-white/50 uppercase text-sm">O teu adversário abandonou a sala.</p>
                 <Button onClick={() => setLocation("/lobby")} size="lg" className="h-12 px-10 font-bold uppercase tracking-widest neon-box">Voltar ao Lobby</Button>
+              </div>
+            </motion.div>
+          )}
+
+          {isArena && opponentOffline && arenaState !== "OPPONENT_DISCONNECTED" && (
+            <motion.div key="opp_offline_room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-30 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
+              <div className="flex flex-col items-center text-center gap-6 p-10 border border-destructive/30 rounded-2xl bg-card/80 max-w-md mx-4 animate-pulse">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 border-4 border-destructive/20 rounded-full" />
+                  <div className="absolute inset-0 border-4 border-destructive border-t-transparent rounded-full animate-spin" />
+                </div>
+                <h2 className="text-3xl font-black uppercase tracking-widest text-destructive neon-text">Oponente Offline</h2>
+                <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                  O adversário perdeu a ligação.<br />Aguardando retorno em <span className="text-destructive font-black text-xl">{offlineCountdown}s</span>...
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {isArena && !connected && (
+            <motion.div key="self_offline_room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.9)", backdropFilter: "blur(12px)" }}>
+              <div className="flex flex-col items-center text-center gap-6 p-10 border border-primary/40 rounded-2xl bg-card/80 max-w-md mx-4">
+                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                <h2 className="text-3xl font-black uppercase tracking-widest text-primary neon-text">Perda de Ligação</h2>
+                <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
+                  Perdeste a ligação ao servidor.<br />A tentar restabelecer conexão...
+                </p>
               </div>
             </motion.div>
           )}
@@ -497,7 +618,9 @@ export default function RoomPage() {
                             <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                               <div className={`max-w-[85%] rounded-2xl px-3 py-2 border ${mine ? "border-primary/40 bg-primary/10" : "border-border bg-white/5"}`}>
                                 <div className="flex items-center justify-between gap-3 mb-1">
-                                  <p className={`text-[10px] font-mono uppercase tracking-widest ${mine ? "text-primary" : "text-secondary"}`}>{mine ? "Você" : message.senderUsername}</p>
+                                  <Link href={`/profile/${message.senderId}`} className={`text-[10px] font-mono uppercase tracking-widest hover:underline cursor-pointer ${mine ? "text-primary" : "text-secondary"}`}>
+                                    {mine ? "Você" : message.senderUsername}
+                                  </Link>
                                   <p className="text-[10px] font-mono text-muted-foreground">{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                                 </div>
                                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</p>
@@ -535,7 +658,14 @@ export default function RoomPage() {
       </div>
     );
   };
-
+  // Early return for 3v3 mode
+  if (roomSize === "3v3") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black text-white">
+        <h1 className="text-4xl font-bold">Coming Soon</h1>
+      </div>
+    );
+  }
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -551,7 +681,7 @@ export default function RoomPage() {
         </Button>
       </div>
 
-      {!isArena ? (
+      {!roomViewActive ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="bg-card/60 border-primary/20 backdrop-blur">
             <CardHeader>
@@ -627,14 +757,14 @@ export default function RoomPage() {
             <div>
               <p className="text-xs font-mono uppercase text-muted-foreground">Sala</p>
               <div className="flex items-center gap-3">
-                <p className="text-2xl font-black tracking-[0.35em] text-secondary">{roomState?.code}</p>
+                <p className="text-2xl font-black tracking-[0.35em] text-secondary">{roomState?.code ?? roomViewCode}</p>
                 <Button variant="outline" size="sm" onClick={handleCopyCode} className="uppercase tracking-widest font-bold">
                   <Copy className="w-4 h-4 mr-2" /> Copiar
                 </Button>
               </div>
             </div>
             <div className="text-sm font-mono text-muted-foreground text-right">
-              <p>{roomState?.hostUsername} vs {roomState?.guestUsername ?? "..."}</p>
+              <p>{roomState?.hostUsername ?? "A sincronizar..."} vs {roomState?.guestUsername ?? "..."}</p>
               <p>{canChat ? "Chat ativo" : "Aguardando segundo jogador"}</p>
             </div>
           </div>

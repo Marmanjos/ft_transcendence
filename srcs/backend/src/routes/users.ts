@@ -1,3 +1,4 @@
+import { getOnlineUserIds } from "../lib/wsServer.js";
 import { Router, type IRouter } from "express";
 import { db, usersTable, matchesTable, roundsTable } from "@workspace/db";
 import { eq, or, sql, count } from "drizzle-orm";
@@ -6,6 +7,19 @@ import { GetUserParams, UpdateUserParams, UpdateUserBody } from "@workspace/api-
 import { upload } from "../lib/upload.js";
 
 const router: IRouter = Router();
+
+router.get("/users/online-status", requireAuth, async (req, res): Promise<void> => {
+  const raw = typeof req.query.ids === "string" ? req.query.ids : "";
+  const ids = raw.split(",").map(Number).filter(n => Number.isInteger(n) && n > 0);
+
+  if (ids.length === 0) {
+    res.json({ online: [] });
+    return;
+  }
+
+  res.json({ online: getOnlineUserIds(ids) });
+});
+
 
 router.get("/users/:id", async (req, res): Promise<void> => {
   const params = GetUserParams.safeParse(req.params);

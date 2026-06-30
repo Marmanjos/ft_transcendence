@@ -3,3 +3,5 @@ srcs/backend/node_modules
 
 srcs/frontend/.env
 srcs/backend/.env
+
+current_context.md

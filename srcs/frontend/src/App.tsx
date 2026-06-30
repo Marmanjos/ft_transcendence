@@ -16,11 +16,17 @@ import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Lobby from "@/pages/lobby";
 import Room from "@/pages/room";
+import Room3v3 from "@/pages/room-3v3";
 import Game from "@/pages/game";
+import Game3v3 from "@/pages/game-3v3";
+import Game3v3Arena from "@/pages/game-3v3-arena";
 import GameMulti from "@/pages/game-multi";
 import History from "@/pages/history";
 import Leaderboard from "@/pages/leaderboard";
 import Profile from "@/pages/profile";
+import Friends from "@/pages/friends";
+import Groups from "@/pages/groups";
+import GroupDetail from "@/pages/group-detail";
 import MatchDetail from "@/pages/match-detail";
 import NotFound from "@/pages/not-found";
 
@@ -37,14 +43,32 @@ function Router() {
         <Route path="/lobby">
           <ProtectedRoute><Lobby /></ProtectedRoute>
         </Route>
-        <Route path="/game">
-          <ProtectedRoute><Game /></ProtectedRoute>
+        <Route path="/game/3v3">
+          <ProtectedRoute><Game3v3 /></ProtectedRoute>
+        </Route>
+        <Route path="/game/3v3/arena">
+          <ProtectedRoute><Game3v3Arena /></ProtectedRoute>
         </Route>
         <Route path="/game/multi">
           <ProtectedRoute><GameMulti /></ProtectedRoute>
         </Route>
+        <Route path="/game">
+          <ProtectedRoute><Game /></ProtectedRoute>
+        </Route>
         <Route path="/room">
           <ProtectedRoute><Room /></ProtectedRoute>
+        </Route>
+        <Route path="/room/3v3">
+          <ProtectedRoute><Room3v3 /></ProtectedRoute>
+        </Route>
+        <Route path="/friends">
+          <ProtectedRoute><Friends /></ProtectedRoute>
+        </Route>
+        <Route path="/groups">
+          <ProtectedRoute><Groups /></ProtectedRoute>
+        </Route>
+        <Route path="/groups/:id">
+          {params => <ProtectedRoute><GroupDetail id={Number(params.id)} /></ProtectedRoute>}
         </Route>
         <Route path="/history">
           <ProtectedRoute><History /></ProtectedRoute>

@@ -1,8 +1,10 @@
-DOCKER = sudo docker
+DOCKER = docker
 COMPOSE = $(DOCKER) compose -f srcs/docker-compose.yml
+PROJECT_URL = http://localhost
 
 all:
-	$(COMPOSE) up -d --build
+	$(COMPOSE) build --no-cache --pull
+	$(COMPOSE) up -d --force-recreate
 
 create:
 	@printf '%s\n' \
@@ -26,9 +28,11 @@ down:
 
 clean:
 	$(COMPOSE) down -v --rmi all
+	$(DOCKER) builder prune -f
+	$(DOCKER) system prune -f
 
 fclean: clean
-	@rm -r -rf srcs/.env secrets/
+	@rm -rf srcs/.env secrets/
 
 re: fclean all
 
@@ -46,4 +50,4 @@ open:
 		exit 1; \
 	fi
 
-.PHONY: create status all down clean fclean re
+.PHONY: create status all down clean fclean re open

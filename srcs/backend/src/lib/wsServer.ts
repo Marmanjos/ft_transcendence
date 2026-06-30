@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { verifyToken } from "./auth.js";
 import { resolveRound, type Elemental } from "./gameEngine.js";
 import { logger } from "./logger.js";
+import { getUnreadNotifications } from "./notifications.js";
 
 type ServerMsg =
   | { type: "QUEUE_JOINED" }
@@ -16,27 +17,37 @@ type ServerMsg =
   | { type: "REMATCH_OFFERED" }
   | { type: "REMATCH_WAITING" }
   | { type: "OPPONENT_DISCONNECTED" }
-  | { type: "ROOM_CREATED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
-  | { type: "ROOM_JOINED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
-  | { type: "ROOM_UPDATED"; code: string; hostUsername: string; guestUsername: string | null; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_CREATED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_JOINED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
+  | { type: "ROOM_UPDATED"; code: string; hostUsername: string; guestUsername: string | null; guestUsernames?: string[]; canChat: boolean; matchId: number | null }
   | { type: "ROOM_CHAT"; code: string; id: string; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ROOM_PLAYER_LEFT"; code: string; username: string }
   | { type: "ROOM_CLOSED"; code: string; reason: "host_left" | "closed" }
   | { type: "ROOM_FULL"; code: string }
   | { type: "ROOM_NOT_FOUND"; code: string }
+  | { type: "GAME_INVITE_RECEIVED"; fromUsername: string; roomCode: string }
+  | { type: "FRIEND_UPDATE"; reason: "REQUEST_RECEIVED" | "REQUEST_ACCEPTED" | "REMOVED"; fromUsername?: string }
+  | { type: "OPPONENT_TEMPORARILY_DISCONNECTED" }
+  | { type: "OPPONENT_RECONNECTED" }
+  | { type: "ORG_MESSAGE"; organizationId: number; id: number; senderId: number; senderUsername: string; text: string; createdAt: string }
   | { type: "ERROR"; message: string }
-  | { type: "PONG" };
+  | { type: "PONG" }
+  | { type: "NOTIFICATION"; id: number; notifType: string; payload: unknown; createdAt: string }
+  | { type: "ORG_INVITE_RECEIVED"; organizationId: number; organizationName: string };
 
 type ClientMsg =
   | { type: "JOIN_QUEUE" }
   | { type: "LEAVE_QUEUE" }
   | { type: "SUBMIT_CHOICE"; matchId: number; elemental: Elemental }
   | { type: "OFFER_REMATCH"; matchId: number }
-  | { type: "CREATE_ROOM" }
+  | { type: "CREATE_ROOM"; mode?: "1v1" | "3v3" }
   | { type: "JOIN_ROOM"; code: string }
   | { type: "LEAVE_ROOM" }
   | { type: "SEND_ROOM_CHAT"; text: string }
-  | { type: "PING" };
+  | { type: "INVITE_TO_PLAY"; targetUserId: number }
+  | { type: "PING" }
+  | { type: "SYNC_MATCH"; matchId: number }
+  | { type: "ABANDON_MATCH"; matchId: number };
 
 interface ConnectedPlayer {
   ws: WebSocket;
@@ -65,21 +76,154 @@ interface PartyRoomMessage {
 interface PartyRoom {
   code: string;
   host: ConnectedPlayer;
-  guest: ConnectedPlayer | null;
+  guests: ConnectedPlayer[];
+  mode: "1v1" | "3v3";
   matchId: number | null;
   messages: PartyRoomMessage[];
+}
+
+interface Room3v3 {
+  matchId: number;
+  code: string;
+  players: ConnectedPlayer[];
+  roundNumber: number;
+  choices: Record<number, Elemental | null>;
+  scores: Record<number, number>;
 }
 
 let waitingPlayer: ConnectedPlayer | null = null;
 const rooms = new Map<number, Room>();
 const partyRooms = new Map<string, PartyRoom>();
+const rooms3v3 = new Map<number, Room3v3>();
 const playerPartyRoom = new Map<number, string>();
 // rematchOffers: matchId → set of userIds that offered rematch
 const rematchOffers = new Map<number, { player1: ConnectedPlayer; player2: ConnectedPlayer; offered: Set<number> }>();
 
+// Tracking active sockets and grace period disconnect timeouts
+const userSockets = new Map<number, Set<WebSocket>>();
+const disconnectTimeouts = new Map<number, NodeJS.Timeout>();
+
 function send(ws: WebSocket, msg: ServerMsg) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
+  }
+}
+
+export function sendToUser(userId: number, msg: ServerMsg) {
+  const sockets = userSockets.get(userId);
+  if (!sockets) return;
+  const payload = JSON.stringify(msg);
+  for (const ws of sockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(payload);
+    }
+  }
+}
+
+export function broadcastToUsers(userIds: number[], msg: ServerMsg) {
+  if (userIds.length === 0) return;
+  const payload = JSON.stringify(msg);
+  for (const userId of userIds) {
+    const sockets = userSockets.get(userId);
+    if (sockets) {
+      for (const ws of sockets) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(payload);
+        }
+      }
+    }
+  }
+}
+
+export function getOnlineUserIds(userIds: number[]): number[] {
+  return userIds.filter(id => {
+    const sockets = userSockets.get(id);
+    return !!sockets && sockets.size > 0;
+  });
+}
+
+function updatePlayerSocket(userId: number, newWs: WebSocket) {
+  if (waitingPlayer && waitingPlayer.userId === userId) {
+    waitingPlayer.ws = newWs;
+  }
+
+  for (const room of rooms.values()) {
+    if (room.player1.userId === userId) {
+      room.player1.ws = newWs;
+    } else if (room.player2.userId === userId) {
+      room.player2.ws = newWs;
+    }
+  }
+
+  for (const room of partyRooms.values()) {
+    if (room.host.userId === userId) {
+      room.host.ws = newWs;
+    } else {
+      const guest = room.guests.find((player) => player.userId === userId);
+      if (guest) {
+        guest.ws = newWs;
+      }
+    }
+  }
+}
+
+async function restoreClientState(userId: number, username: string) {
+  const pending = await getUnreadNotifications(userId);
+  for (const n of pending) {
+    sendToUser(userId, {
+      type: "NOTIFICATION",
+      id: n.id,
+      notifType: n.type,
+      payload: n.payload,
+      createdAt: n.createdAt.toISOString(),
+    });
+  }
+  // 1. Check if they are in an active matchmaking game
+  const foundMatch = getRoomForPlayer(userId);
+  if (foundMatch) {
+    const { room, side } = foundMatch;
+    const opponent = side === "player1" ? room.player2 : room.player1;
+    sendToUser(userId, {
+      type: "MATCH_FOUND",
+      matchId: room.matchId,
+      opponentUsername: opponent.username,
+      yourSide: side,
+    });
+    if (room.choices[side]) {
+      sendToUser(userId, { type: "WAITING_FOR_OPPONENT" });
+    }
+    logger.info({ userId, matchId: room.matchId }, "Restored matchmaking game state for reconnected user");
+    return;
+  }
+
+  // 2. Check if they are in a party room
+  const partyRoom = getPartyRoomByUserId(userId);
+  if (partyRoom) {
+    const state = serializePartyRoom(partyRoom);
+    if (partyRoom.host.userId === userId) {
+      sendToUser(userId, { type: "ROOM_CREATED", ...state });
+    } else {
+      sendToUser(userId, { type: "ROOM_JOINED", ...state });
+    }
+
+    if (partyRoom.messages.length > 0) {
+      for (const message of partyRoom.messages.slice(-20)) {
+        sendToUser(userId, { type: "ROOM_CHAT", code: partyRoom.code, ...message });
+      }
+    }
+
+    if (partyRoom.matchId !== null) {
+      sendSyncMatchState(userId, partyRoom.matchId);
+    }
+    logger.info({ userId, roomCode: partyRoom.code }, "Restored party room state for reconnected user");
+    return;
+  }
+
+  // 3. Check if they were waiting in queue
+  if (waitingPlayer && waitingPlayer.userId === userId) {
+    sendToUser(userId, { type: "QUEUE_JOINED" });
+    logger.info({ userId }, "Restored queue state for reconnected user");
+    return;
   }
 }
 
@@ -93,11 +237,13 @@ function generateRoomCode(): string {
 }
 
 function serializePartyRoom(room: PartyRoom) {
+  const guestUsernames = room.guests.map((guest) => guest.username);
   return {
     code: room.code,
     hostUsername: room.host.username,
-    guestUsername: room.guest?.username ?? null,
-    canChat: Boolean(room.guest),
+    guestUsername: guestUsernames[0] ?? null,
+    guestUsernames,
+    canChat: room.guests.length > 0,
     matchId: room.matchId,
   };
 }
@@ -115,14 +261,77 @@ function getPartyRoomByUserId(userId: number): PartyRoom | null {
 
 function broadcastPartyRoomState(room: PartyRoom) {
   const state = serializePartyRoom(room);
-  send(room.host.ws, { type: "ROOM_UPDATED", ...state });
-  if (room.guest) send(room.guest.ws, { type: "ROOM_UPDATED", ...state });
+  const userIds = [room.host.userId, ...room.guests.map((guest) => guest.userId)];
+  broadcastToUsers(userIds, { type: "ROOM_UPDATED", ...state });
 }
 
 function broadcastPartyRoomChat(room: PartyRoom, message: PartyRoomMessage) {
-  const payload = { type: "ROOM_CHAT" as const, code: room.code, ...message };
-  send(room.host.ws, payload);
-  if (room.guest) send(room.guest.ws, payload);
+  const userIds = [room.host.userId, ...room.guests.map((guest) => guest.userId)];
+  broadcastToUsers(userIds, { type: "ROOM_CHAT" as const, code: room.code, ...message });
+}
+
+function resolveRound3v3(p1: string, p2: string, p3: string): {
+  outcomes: ("WIN" | "LOSS" | "DRAW")[];
+  scoreChanges: number[];
+} {
+  const beats = (a: string, b: string): number => {
+    if (a === b) return 0;
+    if (
+      (a === "TITAN" && b === "RAZOR") ||
+      (a === "RAZOR" && b === "WRAITH") ||
+      (a === "WRAITH" && b === "TITAN")
+    ) {
+      return 1;
+    }
+    return -1;
+  };
+
+  const sc1 = beats(p1, p2) + beats(p1, p3);
+  const sc2 = beats(p2, p1) + beats(p2, p3);
+  const sc3 = beats(p3, p1) + beats(p3, p2);
+
+  const outcome = (sc: number): "WIN" | "LOSS" | "DRAW" => {
+    if (sc > 0) return "WIN";
+    if (sc < 0) return "LOSS";
+    return "DRAW";
+  };
+
+  return {
+    outcomes: [outcome(sc1), outcome(sc2), outcome(sc3)],
+    scoreChanges: [sc1, sc2, sc3],
+  };
+}
+
+function sendSyncMatchState(userId: number, matchId: number) {
+  const room1v1 = rooms.get(matchId);
+  if (room1v1) {
+    const side = room1v1.player1.userId === userId ? "player1" : "player2";
+    const opponent = side === "player1" ? room1v1.player2 : room1v1.player1;
+    sendToUser(userId, {
+      type: "MATCH_FOUND",
+      matchId,
+      opponentUsername: opponent.username,
+      yourSide: side,
+    });
+    if (room1v1.choices[side]) {
+      sendToUser(userId, { type: "WAITING_FOR_OPPONENT" });
+    }
+    return;
+  }
+
+  const matchRoom = rooms3v3.get(matchId);
+  if (matchRoom) {
+    const playersPayload = matchRoom.players.map((p) => ({
+      username: p.username,
+      choice: p.userId === userId ? matchRoom.choices[p.userId] : (matchRoom.choices[p.userId] ? "chosen" : null),
+      score: matchRoom.scores[p.userId],
+    }));
+    sendToUser(userId, {
+      type: "MATCH_3V3_UPDATE",
+      roundNumber: matchRoom.roundNumber,
+      players: playersPayload,
+    });
+  }
 }
 
 async function createMultiPlayerMatch(player1: ConnectedPlayer, player2: ConnectedPlayer) {
@@ -153,35 +362,38 @@ async function createMultiPlayerMatch(player1: ConnectedPlayer, player2: Connect
 }
 
 function sendMatchFound(player1: ConnectedPlayer, player2: ConnectedPlayer, matchId: number) {
-  send(player1.ws, { type: "MATCH_FOUND", matchId, opponentUsername: player2.username, yourSide: "player1" });
-  send(player2.ws, { type: "MATCH_FOUND", matchId, opponentUsername: player1.username, yourSide: "player2" });
+  sendToUser(player1.userId, { type: "MATCH_FOUND", matchId, opponentUsername: player2.username, yourSide: "player1" });
+  sendToUser(player2.userId, { type: "MATCH_FOUND", matchId, opponentUsername: player1.username, yourSide: "player2" });
 }
 
 function detachPlayerFromPartyRoom(userId: number, reason: "host_left" | "closed" = "closed") {
   const room = getPartyRoomByUserId(userId);
   if (!room) return;
 
-  const departingUsername = room.host.userId === userId ? room.host.username : (room.guest?.username ?? "Convidado");
+  const departingUsername =
+    room.host.userId === userId
+      ? room.host.username
+      : (room.guests.find((guest) => guest.userId === userId)?.username ?? "Convidado");
 
   if (room.host.userId === userId) {
-    if (room.guest) {
-      send(room.guest.ws, { type: "ROOM_CLOSED", code: room.code, reason });
-      playerPartyRoom.delete(room.guest.userId);
+    for (const guest of room.guests) {
+      sendToUser(guest.userId, { type: "ROOM_CLOSED", code: room.code, reason });
+      playerPartyRoom.delete(guest.userId);
     }
     partyRooms.delete(room.code);
     playerPartyRoom.delete(room.host.userId);
     return;
   }
 
-  room.guest = null;
+  room.guests = room.guests.filter((guest) => guest.userId !== userId);
   playerPartyRoom.delete(userId);
-  send(room.host.ws, { type: "ROOM_PLAYER_LEFT", code: room.code, username: departingUsername });
+  sendToUser(room.host.userId, { type: "ROOM_PLAYER_LEFT", code: room.code, username: departingUsername });
   broadcastPartyRoomState(room);
 }
 
-async function handleCreateRoom(player: ConnectedPlayer) {
+async function handleCreateRoom(player: ConnectedPlayer, mode: "1v1" | "3v3" = "1v1") {
   if (getPartyRoomByUserId(player.userId)) {
-    send(player.ws, { type: "ERROR", message: "Você já está em uma sala." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você já está em uma sala." });
     return;
   }
 
@@ -189,7 +401,8 @@ async function handleCreateRoom(player: ConnectedPlayer) {
   const room: PartyRoom = {
     code,
     host: player,
-    guest: null,
+    guests: [],
+    mode,
     matchId: null,
     messages: [],
   };
@@ -197,65 +410,115 @@ async function handleCreateRoom(player: ConnectedPlayer) {
   partyRooms.set(code, room);
   playerPartyRoom.set(player.userId, code);
 
-  send(player.ws, { type: "ROOM_CREATED", ...serializePartyRoom(room) });
+  sendToUser(player.userId, { type: "ROOM_CREATED", ...serializePartyRoom(room) });
+}
+
+async function handleInviteToPlay(player: ConnectedPlayer, targetUserId: number) {
+  const targetSockets = userSockets.get(targetUserId);
+  if (!targetSockets || targetSockets.size === 0) {
+    sendToUser(player.userId, { type: "ERROR", message: "Este amigo está offline no momento." });
+    return;
+  }
+
+  let room = getPartyRoomByUserId(player.userId);
+
+  if (!room) {
+    const code = generateRoomCode();
+    room = {
+      code,
+      host: player,
+      guests: [],
+      mode: "1v1",
+      matchId: null,
+      messages: [],
+    };
+    partyRooms.set(code, room);
+    playerPartyRoom.set(player.userId, code);
+    sendToUser(player.userId, { type: "ROOM_CREATED", ...serializePartyRoom(room) });
+  }
+
+  sendToUser(targetUserId, {
+    type: "GAME_INVITE_RECEIVED",
+    fromUsername: player.username,
+    roomCode: room.code,
+  });
 }
 
 async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
   const code = codeRaw.trim().toUpperCase();
   if (!code) {
-    send(player.ws, { type: "ERROR", message: "Informe o código da sala." });
+    sendToUser(player.userId, { type: "ERROR", message: "Informe o código da sala." });
     return;
   }
 
   const existing = getPartyRoomByUserId(player.userId);
   if (existing) {
-    detachPlayerFromPartyRoom(player.userId, "closed");
-  }
-
-  const room = partyRooms.get(code);
-  if (!room) {
-    send(player.ws, { type: "ROOM_NOT_FOUND", code });
-    return;
-  }
-
-  if (room.guest && room.guest.userId !== player.userId) {
-    send(player.ws, { type: "ROOM_FULL", code });
-    return;
-  }
-
-  if (room.host.userId === player.userId) {
-    send(player.ws, { type: "ROOM_JOINED", ...serializePartyRoom(room) });
-    return;
-  }
-
-  room.guest = player;
-  playerPartyRoom.set(player.userId, room.code);
-
-  if (room.matchId === null) {
-    try {
-      room.matchId = await createMultiPlayerMatch(room.host, room.guest);
-      logger.info({ roomCode: room.code, matchId: room.matchId, host: room.host.userId, guest: room.guest.userId }, "Room match created");
-    } catch (err) {
-      logger.error({ err }, "Failed to create room match");
-      send(room.host.ws, { type: "ERROR", message: "Falha ao iniciar a partida da sala." });
-      send(player.ws, { type: "ERROR", message: "Falha ao iniciar a partida da sala." });
-      room.guest = null;
-      playerPartyRoom.delete(player.userId);
+    if (existing.code !== code) {
+      sendToUser(player.userId, { type: "ERROR", message: "Você já está em uma sala. Saia dela antes de entrar em outra." });
       return;
     }
   }
 
-  const state = serializePartyRoom(room);
-  send(room.host.ws, { type: "ROOM_UPDATED", ...state });
-  send(player.ws, { type: "ROOM_JOINED", ...state });
+  const room = partyRooms.get(code);
+  if (!room) {
+    sendToUser(player.userId, { type: "ROOM_NOT_FOUND", code });
+    return;
+  }
 
-  if (room.matchId !== null) {
-    sendMatchFound(room.host, room.guest, room.matchId);
+  const alreadyInRoom =
+    room.host.userId === player.userId || room.guests.some((guest) => guest.userId === player.userId);
+  const maxGuests = room.mode === "3v3" ? 2 : 1;
+  if (!alreadyInRoom && room.guests.length >= maxGuests) {
+    sendToUser(player.userId, { type: "ROOM_FULL", code });
+    return;
+  }
+
+  if (room.host.userId === player.userId) {
+    sendToUser(player.userId, { type: "ROOM_JOINED", ...serializePartyRoom(room) });
+    return;
+  }
+
+  if (!room.guests.some((guest) => guest.userId === player.userId)) {
+    room.guests.push(player);
+  }
+  playerPartyRoom.set(player.userId, room.code);
+
+  const isFull = room.guests.length === maxGuests;
+  if (isFull && room.matchId === null) {
+    if (room.mode === "1v1") {
+      const matchId = await createMultiPlayerMatch(room.host, room.guests[0]);
+      room.matchId = matchId;
+      sendMatchFound(room.host, room.guests[0], matchId);
+    } else if (room.mode === "3v3") {
+      const matchId = Math.floor(Math.random() * 100000000) + 1;
+      room.matchId = matchId;
+      
+      const match3v3: Room3v3 = {
+        matchId,
+        code: room.code,
+        players: [room.host, ...room.guests],
+        roundNumber: 1,
+        choices: {},
+        scores: {},
+      };
+      for (const p of match3v3.players) {
+        match3v3.choices[p.userId] = null;
+        match3v3.scores[p.userId] = 0;
+      }
+      rooms3v3.set(matchId, match3v3);
+      logger.info({ matchId, code: room.code }, "3v3 Match started in party room");
+    }
+  }
+
+  const state = serializePartyRoom(room);
+  sendToUser(player.userId, { type: "ROOM_JOINED", ...state });
+  for (const other of [room.host, ...room.guests].filter((p) => p.userId !== player.userId)) {
+    sendToUser(other.userId, { type: "ROOM_UPDATED", ...state });
   }
 
   if (room.messages.length > 0) {
     for (const message of room.messages.slice(-20)) {
-      send(player.ws, { type: "ROOM_CHAT", code: room.code, ...message });
+      sendToUser(player.userId, { type: "ROOM_CHAT", code: room.code, ...message });
     }
   }
 }
@@ -267,12 +530,12 @@ function handleLeaveRoom(player: ConnectedPlayer) {
 function handleRoomChat(player: ConnectedPlayer, text: string) {
   const room = getPartyRoomByUserId(player.userId);
   if (!room) {
-    send(player.ws, { type: "ERROR", message: "Você não está em uma sala." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você não está em uma sala." });
     return;
   }
 
-  if (!room.guest) {
-    send(player.ws, { type: "ERROR", message: "A sala precisa de dois jogadores para o chat." });
+  if (room.guests.length === 0) {
+    sendToUser(player.userId, { type: "ERROR", message: "A sala precisa de pelo menos dois jogadores para o chat." });
     return;
   }
 
@@ -304,14 +567,30 @@ function getRoomForPlayer(userId: number): { room: Room; side: "player1" | "play
 }
 
 async function handleJoinQueue(player: ConnectedPlayer) {
+  const foundMatch = getRoomForPlayer(player.userId);
+  if (foundMatch) {
+    const { room, side } = foundMatch;
+    const opponent = side === "player1" ? room.player2 : room.player1;
+    sendToUser(player.userId, {
+      type: "MATCH_FOUND",
+      matchId: room.matchId,
+      opponentUsername: opponent.username,
+      yourSide: side,
+    });
+    if (room.choices[side]) {
+      sendToUser(player.userId, { type: "WAITING_FOR_OPPONENT" });
+    }
+    return;
+  }
+
   if (waitingPlayer && waitingPlayer.userId === player.userId) {
-    send(player.ws, { type: "ERROR", message: "Você já está na fila." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você já está na fila." });
     return;
   }
 
   if (!waitingPlayer) {
     waitingPlayer = player;
-    send(player.ws, { type: "QUEUE_JOINED" });
+    sendToUser(player.userId, { type: "QUEUE_JOINED" });
     logger.info({ userId: player.userId }, "Player joined queue");
     return;
   }
@@ -345,12 +624,12 @@ async function handleJoinQueue(player: ConnectedPlayer) {
 
     logger.info({ matchId: match.id, p1: opponent.userId, p2: player.userId }, "Multiplayer match created");
 
-    send(opponent.ws, { type: "MATCH_FOUND", matchId: match.id, opponentUsername: player.username, yourSide: "player1" });
-    send(player.ws, { type: "MATCH_FOUND", matchId: match.id, opponentUsername: opponent.username, yourSide: "player2" });
+    sendToUser(opponent.userId, { type: "MATCH_FOUND", matchId: match.id, opponentUsername: player.username, yourSide: "player1" });
+    sendToUser(player.userId, { type: "MATCH_FOUND", matchId: match.id, opponentUsername: opponent.username, yourSide: "player2" });
   } catch (err) {
     logger.error({ err }, "Failed to create multiplayer match");
-    send(player.ws, { type: "ERROR", message: "Falha ao criar partida." });
-    send(opponent.ws, { type: "ERROR", message: "Falha ao criar partida." });
+    sendToUser(player.userId, { type: "ERROR", message: "Falha ao criar partida." });
+    sendToUser(opponent.userId, { type: "ERROR", message: "Falha ao criar partida." });
     waitingPlayer = null;
   }
 }
@@ -358,19 +637,112 @@ async function handleJoinQueue(player: ConnectedPlayer) {
 async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elemental: Elemental) {
   const room = rooms.get(matchId);
   if (!room) {
-    send(player.ws, { type: "ERROR", message: "Partida não encontrada." });
+    const matchRoom = rooms3v3.get(matchId);
+    if (matchRoom) {
+      if (matchRoom.choices[player.userId] !== null) {
+        sendToUser(player.userId, { type: "ERROR", message: "Você já escolheu seu elemental." });
+        return;
+      }
+      matchRoom.choices[player.userId] = elemental;
+
+      // Broadcast choice to others, masking other players' choices
+      for (const p of matchRoom.players) {
+        const playersPayload = matchRoom.players.map((other) => ({
+          username: other.username,
+          choice: other.userId === p.userId ? matchRoom.choices[other.userId] : (matchRoom.choices[other.userId] ? "chosen" : null),
+          score: matchRoom.scores[other.userId],
+        }));
+        sendToUser(p.userId, {
+          type: "MATCH_3V3_UPDATE",
+          roundNumber: matchRoom.roundNumber,
+          players: playersPayload,
+        });
+      }
+
+      // Check if all players have submitted
+      const allSubmitted = matchRoom.players.every((p) => matchRoom.choices[p.userId] !== null);
+      if (!allSubmitted) {
+        return;
+      }
+
+      // All players have submitted! Resolve the round.
+      const choices = matchRoom.players.map((p) => matchRoom.choices[p.userId] as string);
+      const { outcomes, scoreChanges } = resolveRound3v3(choices[0], choices[1], choices[2]);
+
+      // Update scores
+      matchRoom.players.forEach((p, idx) => {
+        matchRoom.scores[p.userId] += scoreChanges[idx];
+      });
+
+      const roundNumber = matchRoom.roundNumber;
+      const choicesMap: Record<string, string> = {};
+      const outcomesMap: Record<string, "WIN" | "LOSS" | "DRAW"> = {};
+      const scoresMap: Record<string, number> = {};
+
+      matchRoom.players.forEach((p, idx) => {
+        choicesMap[p.username] = choices[idx];
+        outcomesMap[p.username] = outcomes[idx];
+        scoresMap[p.username] = matchRoom.scores[p.userId];
+      });
+
+      // Reset choices for next round
+      for (const p of matchRoom.players) {
+        matchRoom.choices[p.userId] = null;
+      }
+      matchRoom.roundNumber++;
+
+      const isMatchOver = matchRoom.roundNumber > 3;
+
+      if (isMatchOver) {
+        for (const p of matchRoom.players) {
+          sendToUser(p.userId, {
+            type: "MATCH_3V3_ROUND_RESULT",
+            roundNumber,
+            choices: choicesMap,
+            outcomes: outcomesMap,
+            scores: scoresMap,
+          });
+          setTimeout(() => {
+            sendToUser(p.userId, {
+              type: "MATCH_3V3_OVER",
+              scores: scoresMap,
+            });
+          }, 3000);
+        }
+        // Clean up
+        const partyRoom = Array.from(partyRooms.values()).find((r) => r.matchId === matchId);
+        if (partyRoom) {
+          partyRoom.matchId = null;
+          broadcastPartyRoomState(partyRoom);
+        }
+        rooms3v3.delete(matchId);
+      } else {
+        for (const p of matchRoom.players) {
+          sendToUser(p.userId, {
+            type: "MATCH_3V3_ROUND_RESULT",
+            roundNumber,
+            choices: choicesMap,
+            outcomes: outcomesMap,
+            scores: scoresMap,
+          });
+        }
+      }
+      return;
+    }
+
+    sendToUser(player.userId, { type: "ERROR", message: "Partida não encontrada." });
     return;
   }
 
   const side = room.player1.userId === player.userId ? "player1" : "player2";
 
   if (room.choices[side]) {
-    send(player.ws, { type: "ERROR", message: "Você já enviou sua escolha." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você já enviou sua escolha." });
     return;
   }
 
   room.choices[side] = elemental;
-  send(player.ws, { type: "WAITING_FOR_OPPONENT" });
+  sendToUser(player.userId, { type: "WAITING_FOR_OPPONENT" });
 
   if (!room.choices.player1 || !room.choices.player2) return;
 
@@ -421,7 +793,7 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
     const p1Outcome = outcome === "WIN" ? "WIN" : outcome === "LOSS" ? "LOSS" : "DRAW";
     const p2Outcome = outcome === "WIN" ? "LOSS" : outcome === "LOSS" ? "WIN" : "DRAW";
 
-    send(room.player1.ws, {
+    sendToUser(room.player1.userId, {
       type: "ROUND_RESULT",
       roundNumber,
       player1Choice: p1Choice,
@@ -430,7 +802,7 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
       player1Score: room.player1Score,
       player2Score: room.player2Score,
     });
-    send(room.player2.ws, {
+    sendToUser(room.player2.userId, {
       type: "ROUND_RESULT",
       roundNumber,
       player1Choice: p1Choice,
@@ -445,8 +817,8 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
       const p2 = room.player2;
       const finishedMatchId = room.matchId;
       setTimeout(() => {
-        send(p1.ws, { type: "MATCH_OVER", winnerId, player1Score: room.player1Score, player2Score: room.player2Score });
-        send(p2.ws, { type: "MATCH_OVER", winnerId, player1Score: room.player1Score, player2Score: room.player2Score });
+        const userIds = [p1.userId, p2.userId];
+        broadcastToUsers(userIds, { type: "MATCH_OVER", winnerId, player1Score: room.player1Score, player2Score: room.player2Score });
         // Register rematch slot so both players can offer a rematch
         rematchOffers.set(finishedMatchId, { player1: p1, player2: p2, offered: new Set() });
         // Clean up after 3 minutes if no rematch accepted
@@ -459,21 +831,21 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
     }
   } catch (err) {
     logger.error({ err }, "Error resolving round");
-    send(player.ws, { type: "ERROR", message: "Erro ao processar rodada." });
+    sendToUser(player.userId, { type: "ERROR", message: "Erro ao processar rodada." });
   }
 }
 
 async function handleOfferRematch(player: ConnectedPlayer, matchId: number) {
   const slot = rematchOffers.get(matchId);
   if (!slot) {
-    send(player.ws, { type: "ERROR", message: "Revanche não disponível." });
+    sendToUser(player.userId, { type: "ERROR", message: "Revanche não disponível." });
     return;
   }
 
   const isPlayer1 = slot.player1.userId === player.userId;
   const isPlayer2 = slot.player2.userId === player.userId;
   if (!isPlayer1 && !isPlayer2) {
-    send(player.ws, { type: "ERROR", message: "Você não fez parte desta partida." });
+    sendToUser(player.userId, { type: "ERROR", message: "Você não fez parte desta partida." });
     return;
   }
 
@@ -482,8 +854,8 @@ async function handleOfferRematch(player: ConnectedPlayer, matchId: number) {
 
   if (slot.offered.size === 1) {
     // First offer — notify self to wait, tell opponent they were offered
-    send(player.ws, { type: "REMATCH_WAITING" });
-    send(opponent.ws, { type: "REMATCH_OFFERED" });
+    sendToUser(player.userId, { type: "REMATCH_WAITING" });
+    sendToUser(opponent.userId, { type: "REMATCH_OFFERED" });
     return;
   }
 
@@ -515,12 +887,68 @@ async function handleOfferRematch(player: ConnectedPlayer, matchId: number) {
 
     logger.info({ matchId: newMatch.id }, "Rematch match created");
 
-    send(slot.player1.ws, { type: "MATCH_FOUND", matchId: newMatch.id, opponentUsername: slot.player2.username, yourSide: "player1" });
-    send(slot.player2.ws, { type: "MATCH_FOUND", matchId: newMatch.id, opponentUsername: slot.player1.username, yourSide: "player2" });
+    sendToUser(slot.player1.userId, { type: "MATCH_FOUND", matchId: newMatch.id, opponentUsername: slot.player2.username, yourSide: "player1" });
+    sendToUser(slot.player2.userId, { type: "MATCH_FOUND", matchId: newMatch.id, opponentUsername: slot.player1.username, yourSide: "player2" });
   } catch (err) {
     logger.error({ err }, "Failed to create rematch");
-    send(slot.player1.ws, { type: "ERROR", message: "Falha ao criar revanche." });
-    send(slot.player2.ws, { type: "ERROR", message: "Falha ao criar revanche." });
+    sendToUser(slot.player1.userId, { type: "ERROR", message: "Falha ao criar revanche." });
+    sendToUser(slot.player2.userId, { type: "ERROR", message: "Falha ao criar revanche." });
+  }
+}
+
+async function handleAbandonMatch(player: ConnectedPlayer, matchId: number) {
+  // 1. Check 1v1 active rooms
+  const room = rooms.get(matchId);
+  if (room) {
+    const isPlayer1 = room.player1.userId === player.userId;
+    const isPlayer2 = room.player2.userId === player.userId;
+    if (isPlayer1 || isPlayer2) {
+      const opponent = isPlayer1 ? room.player2 : room.player1;
+      const winnerId = isPlayer1 ? room.player2.userId : room.player1.userId;
+
+      send(opponent.ws, { type: "OPPONENT_DISCONNECTED" });
+      rooms.delete(matchId);
+
+      await db.update(matchesTable)
+        .set({ 
+          status: "COMPLETED", 
+          winnerId,
+          completedAt: new Date() 
+        })
+        .where(eq(matchesTable.id, matchId))
+        .catch((err) => logger.error({ err }, "Failed to update match on voluntary abandon"));
+
+      logger.info({ matchId, userId: player.userId }, "Player voluntarily abandoned 1v1 match");
+    }
+    return;
+  }
+
+  // 2. Check 3v3 active rooms
+  const match3v3 = rooms3v3.get(matchId);
+  if (match3v3) {
+    if (match3v3.players.some((p) => p.userId === player.userId)) {
+      for (const p of match3v3.players) {
+        if (p.userId !== player.userId) {
+          sendToUser(p.userId, { type: "OPPONENT_DISCONNECTED" });
+        }
+      }
+      rooms3v3.delete(matchId);
+
+      await db.update(matchesTable)
+        .set({ 
+          status: "ABANDONED", 
+          completedAt: new Date() 
+        })
+        .where(eq(matchesTable.id, matchId))
+        .catch((err) => logger.error({ err }, "Failed to update 3v3 match on voluntary abandon"));
+
+      const partyRoom = Array.from(partyRooms.values()).find((r) => r.matchId === matchId);
+      if (partyRoom) {
+        partyRoom.matchId = null;
+        broadcastPartyRoomState(partyRoom);
+      }
+      logger.info({ matchId, userId: player.userId }, "Player voluntarily abandoned 3v3 match");
+    }
   }
 }
 
@@ -529,6 +957,25 @@ function handleDisconnect(userId: number) {
     waitingPlayer = null;
     logger.info({ userId }, "Player left queue on disconnect");
     return;
+  }
+
+  // Check 3v3 matches
+  for (const match of rooms3v3.values()) {
+    if (match.players.some((p) => p.userId === userId)) {
+      for (const p of match.players) {
+        if (p.userId !== userId) {
+          sendToUser(p.userId, { type: "OPPONENT_DISCONNECTED" });
+        }
+      }
+      rooms3v3.delete(match.matchId);
+      const partyRoom = Array.from(partyRooms.values()).find((r) => r.matchId === match.matchId);
+      if (partyRoom) {
+        partyRoom.matchId = null;
+        broadcastPartyRoomState(partyRoom);
+      }
+      logger.info({ matchId: match.matchId, userId }, "Player disconnected from 3v3 match");
+      return;
+    }
   }
 
   const found = getRoomForPlayer(userId);
@@ -591,7 +1038,7 @@ export function attachWsServer(server: Server) {
       try {
         msg = JSON.parse(rawData) as ClientMsg;
       } catch {
-        send(ws, { type: "ERROR", message: "Mensagem inválida." });
+        sendToUser(player.userId, { type: "ERROR", message: "Mensagem inválida." });
         return;
       }
 
@@ -609,7 +1056,7 @@ export function attachWsServer(server: Server) {
           await handleOfferRematch(player, msg.matchId);
           break;
         case "CREATE_ROOM":
-          await handleCreateRoom(player);
+          await handleCreateRoom(player, msg.mode ?? "1v1");
           break;
         case "JOIN_ROOM":
           await handleJoinRoom(player, msg.code);
@@ -620,8 +1067,17 @@ export function attachWsServer(server: Server) {
         case "SEND_ROOM_CHAT":
           handleRoomChat(player, msg.text);
           break;
+        case "INVITE_TO_PLAY":
+          await handleInviteToPlay(player, msg.targetUserId);
+          break;
         case "PING":
-          send(ws, { type: "PONG" });
+          sendToUser(player.userId, { type: "PONG" });
+          break;
+        case "SYNC_MATCH":
+          sendSyncMatchState(player.userId, msg.matchId);
+          break;
+        case "ABANDON_MATCH":
+          await handleAbandonMatch(player, msg.matchId);
           break;
       }
     };
@@ -645,6 +1101,54 @@ export function attachWsServer(server: Server) {
       player = { ws, userId: user.id, username: user.username };
       logger.info({ userId: user.id }, "WS client connected");
 
+      // Register socket in connection manager
+      let sockets = userSockets.get(user.id);
+      if (!sockets) {
+        sockets = new Set();
+        userSockets.set(user.id, sockets);
+      }
+      sockets.add(ws);
+
+      // Cancel disconnection grace period if active
+      const timeout = disconnectTimeouts.get(user.id);
+      if (timeout) {
+        clearTimeout(timeout);
+        disconnectTimeouts.delete(user.id);
+        logger.info({ userId: user.id }, "Player reconnected within grace period; timeout cancelled");
+
+        // Notify opponent of reconnection
+        const matchRoom = getRoomForPlayer(user.id);
+        if (matchRoom) {
+          const opponent = matchRoom.side === "player1" ? matchRoom.room.player2 : matchRoom.room.player1;
+          send(opponent.ws, { type: "OPPONENT_RECONNECTED" });
+        } else {
+          const partyRoom = getPartyRoomByUserId(user.id);
+          if (partyRoom && partyRoom.matchId !== null) {
+            const activeMatchRoom = rooms.get(partyRoom.matchId);
+            if (activeMatchRoom) {
+              const side = activeMatchRoom.player1.userId === user.id ? "player1" : "player2";
+              const opponent = side === "player1" ? activeMatchRoom.player2 : activeMatchRoom.player1;
+              send(opponent.ws, { type: "OPPONENT_RECONNECTED" });
+            } else {
+              const active3v3Room = rooms3v3.get(partyRoom.matchId);
+              if (active3v3Room) {
+                for (const p of active3v3Room.players) {
+                  if (p.userId !== user.id) {
+                    sendToUser(p.userId, { type: "OPPONENT_RECONNECTED" });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Update socket references in active games/rooms
+      updatePlayerSocket(user.id, ws);
+
+      // Restore UI state for the client
+      restoreClientState(user.id, user.username);
+
       for (const rawData of pendingMessages.splice(0)) {
         void handleClientMessage(rawData);
       }
@@ -655,8 +1159,52 @@ export function attachWsServer(server: Server) {
 
     ws.on("close", () => {
       if (player) {
-        handleDisconnect(player.userId);
-        detachPlayerFromPartyRoom(player.userId, "host_left");
+        const userId = player.userId;
+        const sockets = userSockets.get(userId);
+        if (sockets) {
+          sockets.delete(ws);
+          if (sockets.size === 0) {
+            userSockets.delete(userId);
+
+            // Notify opponent of temporary disconnection
+            const matchRoom = getRoomForPlayer(userId);
+            if (matchRoom) {
+              const opponent = matchRoom.side === "player1" ? matchRoom.room.player2 : matchRoom.room.player1;
+              send(opponent.ws, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
+            } else {
+              const partyRoom = getPartyRoomByUserId(userId);
+              if (partyRoom && partyRoom.matchId !== null) {
+                const activeMatchRoom = rooms.get(partyRoom.matchId);
+                if (activeMatchRoom) {
+                  const side = activeMatchRoom.player1.userId === userId ? "player1" : "player2";
+                  const opponent = side === "player1" ? activeMatchRoom.player2 : activeMatchRoom.player1;
+                  send(opponent.ws, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
+                } else {
+                  const active3v3Room = rooms3v3.get(partyRoom.matchId);
+                  if (active3v3Room) {
+                    for (const p of active3v3Room.players) {
+                      if (p.userId !== userId) {
+                        sendToUser(p.userId, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // Start grace period timeout (8 seconds)
+            logger.info({ userId }, "All client sockets disconnected; starting grace period timeout");
+            const timeout = setTimeout(() => {
+              disconnectTimeouts.delete(userId);
+              handleDisconnect(userId);
+              detachPlayerFromPartyRoom(userId, "host_left");
+              logger.info({ userId }, "Player disconnected permanently after grace period");
+            }, 8000);
+            disconnectTimeouts.set(userId, timeout);
+          } else {
+            logger.info({ userId, remainingSockets: sockets.size }, "Client closed one socket, other sockets still active");
+          }
+        }
         logger.info({ userId: player.userId }, "WS client disconnected");
       }
     });

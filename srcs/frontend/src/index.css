@@ -54,40 +54,40 @@
 }
 
 :root {
-  /* Default to dark mode for the cyberpunk vibe */
-  --background: 240 10% 4%;
+  /* Default to dark mode for the cyberpunk vibe but with a readable dark blue background */
+  --background: 222 47% 11%;
   --foreground: 180 100% 90%;
   
   --border: 180 100% 25%;
-  --input: 180 100% 15%;
+  --input: 222 40% 16%;
   --ring: 180 100% 50%;
 
-  --card: 240 10% 6%;
+  --card: 222 47% 15%;
   --card-foreground: 180 100% 90%;
   --card-border: 180 100% 20%;
 
-  --popover: 240 10% 6%;
+  --popover: 222 47% 15%;
   --popover-foreground: 180 100% 90%;
   --popover-border: 180 100% 20%;
 
   --primary: 180 100% 50%;
-  --primary-foreground: 240 10% 4%;
+  --primary-foreground: 222 47% 11%;
   --primary-border: 180 100% 40%;
 
   --secondary: 320 100% 50%;
-  --secondary-foreground: 240 10% 4%;
+  --secondary-foreground: 222 47% 11%;
   --secondary-border: 320 100% 40%;
 
-  --muted: 240 10% 10%;
+  --muted: 222 30% 20%;
   --muted-foreground: 180 30% 60%;
-  --muted-border: 240 10% 20%;
+  --muted-border: 222 30% 25%;
 
   --accent: 280 100% 60%;
-  --accent-foreground: 240 10% 4%;
+  --accent-foreground: 222 47% 11%;
   --accent-border: 280 100% 50%;
 
   --destructive: 0 100% 50%;
-  --destructive-foreground: 240 10% 4%;
+  --destructive-foreground: 222 47% 11%;
   --destructive-border: 0 100% 40%;
 
   /* Elementals */
@@ -104,39 +104,39 @@
 
 .dark {
   /* Same as root since we force dark mode styling */
-  --background: 240 10% 4%;
+  --background: 222 47% 11%;
   --foreground: 180 100% 90%;
   
   --border: 180 100% 25%;
-  --input: 180 100% 15%;
+  --input: 222 40% 16%;
   --ring: 180 100% 50%;
 
-  --card: 240 10% 6%;
+  --card: 222 47% 15%;
   --card-foreground: 180 100% 90%;
   --card-border: 180 100% 20%;
 
-  --popover: 240 10% 6%;
+  --popover: 222 47% 15%;
   --popover-foreground: 180 100% 90%;
   --popover-border: 180 100% 20%;
 
   --primary: 180 100% 50%;
-  --primary-foreground: 240 10% 4%;
+  --primary-foreground: 222 47% 11%;
   --primary-border: 180 100% 40%;
 
   --secondary: 320 100% 50%;
-  --secondary-foreground: 240 10% 4%;
+  --secondary-foreground: 222 47% 11%;
   --secondary-border: 320 100% 40%;
 
-  --muted: 240 10% 10%;
+  --muted: 222 30% 20%;
   --muted-foreground: 180 30% 60%;
-  --muted-border: 240 10% 20%;
+  --muted-border: 222 30% 25%;
 
   --accent: 280 100% 60%;
-  --accent-foreground: 240 10% 4%;
+  --accent-foreground: 222 47% 11%;
   --accent-border: 280 100% 50%;
 
   --destructive: 0 100% 50%;
-  --destructive-foreground: 240 10% 4%;
+  --destructive-foreground: 222 47% 11%;
   --destructive-border: 0 100% 40%;
 }
 

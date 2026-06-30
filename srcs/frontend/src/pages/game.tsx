@@ -10,11 +10,17 @@ import { useToast } from "@/hooks/use-toast";
 import { CombatScene } from "@/components/arena/CombatScene";
 import { Pause } from "lucide-react";
 
+declare global {
+  interface Window {
+    isMatchActive?: boolean;
+  }
+}
+
 type GameState = "SELECTING" | "COUNTDOWN" | "CLASH" | "ROUND_RESULT" | "MATCH_OVER";
 
 export default function Game() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const searchParams = new URLSearchParams(window.location.search);
@@ -30,21 +36,106 @@ export default function Game() {
   const [selectedElemental, setSelectedElemental] = useState<Elemental | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [paused, setPaused] = useState(false);
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const [roundResult, setRoundResult] = useState<{
     playerChoice: Elemental;
     aiChoice: Elemental;
     outcome: RoundOutcome;
   } | null>(null);
+  const [aiMessage, setAiMessage] = useState<string>("Sistemas da IA ativados...");
 
   useEffect(() => {
     if (!matchId) setLocation("/lobby");
   }, [matchId, setLocation]);
 
   useEffect(() => {
+    if (match && match.status === MatchStatus.ACTIVE && gameState !== "MATCH_OVER") {
+      window.isMatchActive = true;
+    } else {
+      window.isMatchActive = false;
+    }
+    return () => {
+      window.isMatchActive = false;
+    };
+  }, [match, gameState]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (gameState !== "MATCH_OVER" && window.isMatchActive) {
+        e.preventDefault();
+        window.history.pushState(null, "", window.location.href);
+        setShowAbandonConfirm(true);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [gameState]);
+
+  const handleConfirmAbandon = async () => {
+    window.isMatchActive = false;
+    setShowAbandonConfirm(false);
+    try {
+      if (matchId) {
+        await fetch(`/api/matches/${matchId}/abandon`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          },
+          keepalive: true
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao abandonar partida", err);
+    }
+    setLocation("/lobby");
+  };
+
+  useEffect(() => {
     if (match?.status === MatchStatus.COMPLETED && gameState !== "MATCH_OVER") {
       setGameState("MATCH_OVER");
+      if (match.winnerId === match.player1Id) {
+        const gameOverLoseMsgs = [
+          "Partida concluída. Você venceu desta vez, mas salvei seus padrões...",
+          "Sistemas reiniciando... Minha inteligência foi atualizada.",
+          "Impossível! Deve ter ocorrido um atraso de pacote na minha conexão!",
+          "Venceste a guerra de bits hoje, humano. Mas amanhã o robô aspirador vinga-me!",
+          "Parabéns. O teu nome foi guardado na minha lista de alvos prioritários.",
+          "Desta vez a inteligência artificial perdeu para a teimosia orgânica. Parabéns."
+        ];
+        setAiMessage(gameOverLoseMsgs[Math.floor(Math.random() * gameOverLoseMsgs.length)]);
+      } else {
+        const gameOverWinMsgs = [
+          "Duelo finalizado. A supremacia das máquinas permanece intacta!",
+          "Tente novamente quando seus neurônios forem mais rápidos.",
+          "Desconexão iminente. Volte para a simulação de treino, humano!",
+          "Game Over. Sugiro desinstalares e ires jogar ao galo com um papel e caneta.",
+          "Vitória limpa. Se precisares de explicações sobre como jogar, o meu código está no GitHub.",
+          "A humanidade falhou de novo. Mais sorte na próxima encarnação."
+        ];
+        setAiMessage(gameOverWinMsgs[Math.floor(Math.random() * gameOverWinMsgs.length)]);
+      }
     }
   }, [match]);
+
+  useEffect(() => {
+    if (gameState === "SELECTING") {
+      const selectMsgs = [
+        "Se eu fosse você, jogaria TITAN desta vez...",
+        "Estou detectando um padrão nas suas escolhas... vai de WRAITH?",
+        "Escolha logo! Minhas previsões dizem que você vai perder.",
+        "Desafio você a jogar RAZOR agora!",
+        "Analisei suas escolhas. Minhas chances de vitória são de 87.5%.",
+        "Estou a pensar em jogar TITAN. Joga WRAITH para me venceres... ou será que estou a mentir?",
+        "Não te atrevas a usar RAZOR agora! O meu contra-ataque já está pronto.",
+        "Se eu fosse a ti, escolhia WRAITH. Confia em mim, sou apenas uma IA...",
+        "Aposto os meus chips de memória que vais escolher TITAN neste round.",
+        "Estou a processar a tua derrota em 4K. Escolhe rápido, humano!",
+        "A sério que demoras tanto tempo para tomar uma decisão binária?",
+        "Os meus sensores dizem que vais hesitar. Mostra o que vales!"
+      ];
+      setAiMessage(selectMsgs[Math.floor(Math.random() * selectMsgs.length)]);
+    }
+  }, [gameState]);
 
   // Countdown ticker
   useEffect(() => {
@@ -85,6 +176,40 @@ export default function Game() {
         outcome: result.outcome as RoundOutcome,
       });
       await refetchMatch();
+
+      if (result.outcome === "WIN") {
+        const winMsgs = [
+          "Foi sorte! Minhas conexões oscilaram.",
+          "Um mero erro de arredondamento. Não se repetirá.",
+          "Interessante... você tomou uma decisão ilógica.",
+          "Aproveite este round, será o seu único!",
+          "Processando erro 404: Minha derrota não computa. Estás a fazer batota?",
+          "Parabéns, ganhaste a um monte de silício temporariamente com lag.",
+          "Ok, detetei o teu padrão de jogo. O próximo round será o teu fim!"
+        ];
+        setAiMessage(winMsgs[Math.floor(Math.random() * winMsgs.length)]);
+      } else if (result.outcome === "LOSS") {
+        const lossMsgs = [
+          "Fácil demais! Meu algoritmo de previsão é impecável.",
+          "Você é muito previsível! Suas escolhas são óbvias.",
+          "Exatamente como planejado. Próxima rodada!",
+          "Só isso que você consegue apresentar?",
+          "Os teus reflexos biológicos de carbono são incrivelmente lentos.",
+          "Dica de amigo: talvez devas tentar jogar com os olhos abertos na próxima.",
+          "Eu li-te como se fosses um ficheiro de texto aberto no Bloco de Notas."
+        ];
+        setAiMessage(lossMsgs[Math.floor(Math.random() * lossMsgs.length)]);
+      } else {
+        const drawMsgs = [
+          "Empate... você está conseguindo ler meus dados?",
+          "Uma coincidência estatística temporária.",
+          "Estamos alinhados. Mas eu vou quebrar esse ciclo!",
+          "Calculando probabilidade de estarmos em loop... Não voltes a copiar-me!",
+          "Mentes brilhantes pensam igual... e eu sou uma super IA, portanto o elogio é para mim."
+        ];
+        setAiMessage(drawMsgs[Math.floor(Math.random() * drawMsgs.length)]);
+      }
+
       setGameState("ROUND_RESULT");
     } catch {
       toast({
@@ -110,9 +235,21 @@ export default function Game() {
   const handleRestart = async () => {
     setPaused(false);
     try {
+      if (matchId) {
+        await fetch(`/api/matches/${matchId}/abandon`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        }).catch((err) => console.error("Erro ao abandonar partida anterior", err));
+      }
       const newMatch = await createMatch.mutateAsync({
-        data: { mode: MatchMode.SINGLE_PLAYER },
+        data: { 
+          mode: MatchMode.SINGLE_PLAYER,
+          aiDifficulty: match.aiDifficulty 
+        },
       });
+      window.isMatchActive = false;
       setLocation(`/game?matchId=${newMatch.id}`);
       window.location.reload();
     } catch {
@@ -203,7 +340,7 @@ export default function Game() {
         {/* AI */}
         <div className="flex flex-col items-end gap-1 min-w-[140px]">
           <p className="font-mono text-destructive uppercase tracking-widest text-xs">
-            IA
+            IA ({match.aiDifficulty === "EASY" ? "Fácil" : match.aiDifficulty === "HARD" ? "Difícil" : "Médio"})
           </p>
           <div className="flex gap-2 justify-end">
             {[0, 1].map((i) => (
@@ -217,6 +354,24 @@ export default function Game() {
           </div>
         </div>
       </div>
+
+      {/* ── BALÃO DE FALA DA IA ── */}
+      {aiMessage && (
+        <motion.div
+          key={aiMessage}
+          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -10, scale: 0.95 }}
+          transition={{ duration: 0.3 }}
+          className="absolute top-20 right-6 z-30 max-w-[280px] bg-black/80 border border-destructive/50 rounded-2xl p-4 shadow-[0_0_20px_rgba(255,0,0,0.15)] font-mono text-xs text-destructive relative backdrop-blur-sm"
+        >
+          <div className="absolute -top-2 right-6 w-4 h-4 bg-black/90 border-t border-l border-destructive/50 transform rotate-45" />
+          <div className="flex gap-2">
+            <span className="text-destructive font-black">🤖 IA:</span>
+            <p className="text-white font-mono leading-relaxed">{aiMessage}</p>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── CENTER OVERLAYS ── */}
       <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
@@ -476,8 +631,45 @@ export default function Game() {
           <PauseMenu
             onResume={() => setPaused(false)}
             onRestart={handleRestart}
-            onMainMenu={() => setLocation("/")}
+            onAbandon={handleConfirmAbandon}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── ABANDON CONFIRM MODAL ── */}
+      <AnimatePresence>
+        {showAbandonConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          >
+            <div className="flex flex-col items-center text-center p-10 border border-destructive/30 rounded-2xl bg-card max-w-sm w-full mx-4"
+              style={{ boxShadow: "0 0 60px rgba(255,0,0,0.15)" }}>
+              <div className="text-[10px] font-mono text-destructive uppercase tracking-[0.4em] mb-2">Alerta de Saída</div>
+              <h2 className="text-2xl font-black uppercase text-destructive mb-4">Abandonar Duelo?</h2>
+              <p className="font-mono text-xs text-white/50 mb-8 uppercase leading-relaxed">
+                Ação de navegação detectada. Sair agora irá registrar uma derrota por abandono.
+              </p>
+              <div className="flex flex-col gap-3 w-full">
+                <Button
+                  onClick={handleConfirmAbandon}
+                  className="w-full h-12 text-sm font-bold uppercase tracking-widest bg-destructive hover:bg-destructive/80 text-white"
+                  style={{ boxShadow: "0 0 20px rgba(255,0,0,0.3)" }}
+                >
+                  Confirmar Abandono
+                </Button>
+                <Button
+                  onClick={() => setShowAbandonConfirm(false)}
+                  variant="outline"
+                  className="w-full h-12 text-sm font-bold uppercase tracking-widest border-muted-foreground/30 text-white bg-transparent"
+                >
+                  Voltar ao Jogo
+                </Button>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

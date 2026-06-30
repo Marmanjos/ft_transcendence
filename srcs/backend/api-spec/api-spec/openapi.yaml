@@ -18,6 +18,8 @@ tags:
     description: Match management
   - name: leaderboard
     description: Leaderboard and stats
+  - name: organizations
+    description: Organization management
 paths:
   /healthz:
     get:
@@ -329,6 +331,251 @@ paths:
               schema:
                 $ref: "#/components/schemas/ArenaSummary"
 
+  /friends:
+    get:
+      operationId: listFriends
+      tags: [users]
+      summary: Get list of friends and pending requests
+      responses:
+        "200":
+          description: Friends list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Friendship"
+    post:
+      operationId: addFriend
+      tags: [users]
+      summary: Send a friend request or add a friend
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                friendId:
+                  type: integer
+                username:
+                  type: string
+      responses:
+        "201":
+          description: Friend request sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Friendship"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /friends/{id}/accept:
+    post:
+      operationId: acceptFriend
+      tags: [users]
+      summary: Accept a friend request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Friend request accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Friendship"
+        "404":
+          description: Friendship not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /friends/{id}:
+    delete:
+      operationId: removeFriend
+      tags: [users]
+      summary: Remove a friend or decline/cancel a request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Friendship removed
+
+  /organizations:
+    get:
+      operationId: listOrganizations
+      tags: [organizations]
+      summary: List organizations for current user
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User organizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrganizationSummary"
+    post:
+      operationId: createOrganization
+      tags: [organizations]
+      summary: Create an organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationInput"
+      responses:
+        "201":
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSummary"
+
+  /organizations/{id}:
+    get:
+      operationId: getOrganization
+      tags: [organizations]
+      summary: Get organization details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationDetail"
+    patch:
+      operationId: updateOrganization
+      tags: [organizations]
+      summary: Update organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationInput"
+      responses:
+        "200":
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSummary"
+    delete:
+      operationId: deleteOrganization
+      tags: [organizations]
+      summary: Delete organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Organization deleted
+
+  /organizations/{id}/members:
+    post:
+      operationId: addOrganizationMember
+      tags: [organizations]
+      summary: Add user to organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddOrganizationMemberInput"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMember"
+
+  /organizations/{id}/members/{userId}:
+    delete:
+      operationId: removeOrganizationMember
+      tags: [organizations]
+      summary: Remove user from organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Member removed
+
+  /organizations/{id}/messages:
+    post:
+      operationId: createOrganizationMessage
+      tags: [organizations]
+      summary: Create organization message
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationMessageInput"
+      responses:
+        "201":
+          description: Message created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMessage"
+
 components:
   schemas:
     HealthStatus:
@@ -357,7 +604,6 @@ components:
           maxLength: 20
         email:
           type: string
-          format: email
         password:
           type: string
           minLength: 6
@@ -443,7 +689,7 @@ components:
 
     Match:
       type: object
-      required: [id, player1Id, mode, status, player1Score, player2Score, createdAt]
+      required: [id, player1Id, mode, status, player1Score, player2Score, aiDifficulty, createdAt]
       properties:
         id:
           type: integer
@@ -465,6 +711,9 @@ components:
           type: integer
         player2Score:
           type: integer
+        aiDifficulty:
+          type: string
+          enum: [EASY, MEDIUM, HARD]
         createdAt:
           type: string
           format: date-time
@@ -477,6 +726,9 @@ components:
       properties:
         mode:
           $ref: "#/components/schemas/MatchMode"
+        aiDifficulty:
+          type: string
+          enum: [EASY, MEDIUM, HARD]
 
     Round:
       type: object
@@ -572,3 +824,142 @@ components:
           type: integer
         activeMatches:
           type: integer
+
+    Friendship:
+      type: object
+      required: [id, friend, status, createdAt]
+      properties:
+        id:
+          type: integer
+        friend:
+          $ref: "#/components/schemas/User"
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REQUEST_RECEIVED]
+        createdAt:
+          type: string
+          format: date-time
+
+    OrganizationRole:
+      type: string
+      enum: [OWNER, ADMIN, MEMBER]
+
+    OrganizationPermissions:
+      type: object
+      required: [create, read, update, delete, manageMembers]
+      properties:
+        create:
+          type: boolean
+        read:
+          type: boolean
+        update:
+          type: boolean
+        delete:
+          type: boolean
+        manageMembers:
+          type: boolean
+
+    OrganizationInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 80
+        description:
+          type: ["string", "null"]
+
+    OrganizationSummary:
+      type: object
+      required: [id, name, ownerId, role, permissions, memberCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        ownerId:
+          type: integer
+        role:
+          $ref: "#/components/schemas/OrganizationRole"
+        permissions:
+          $ref: "#/components/schemas/OrganizationPermissions"
+        memberCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrganizationMember:
+      type: object
+      required: [id, userId, username, email, role, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        role:
+          $ref: "#/components/schemas/OrganizationRole"
+        createdAt:
+          type: string
+          format: date-time
+
+    AddOrganizationMemberInput:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+        role:
+          $ref: "#/components/schemas/OrganizationRole"
+
+    OrganizationMessageInput:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+
+    OrganizationMessage:
+      type: object
+      required: [id, senderId, senderUsername, text, createdAt]
+      properties:
+        id:
+          type: integer
+        senderId:
+          type: integer
+        senderUsername:
+          type: string
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    OrganizationDetail:
+      allOf:
+        - $ref: "#/components/schemas/OrganizationSummary"
+        - type: object
+          required: [members, messages]
+          properties:
+            members:
+              type: array
+              items:
+                $ref: "#/components/schemas/OrganizationMember"
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/OrganizationMessage"
