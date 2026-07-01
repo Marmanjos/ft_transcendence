@@ -66,7 +66,14 @@ export default function Register() {
                 <FormItem>
                   <FormLabel className="text-secondary font-mono uppercase tracking-wider">Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="seu@email.com" className="bg-background/50 border-secondary/50 focus-visible:ring-secondary font-mono" {...field} />
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      placeholder="seu@email.com"
+                      className="bg-background/50 border-secondary/50 focus-visible:ring-secondary font-mono"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -79,7 +86,13 @@ export default function Register() {
                 <FormItem>
                   <FormLabel className="text-secondary font-mono uppercase tracking-wider">Senha de Acesso</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="••••••••" className="bg-background/50 border-secondary/50 focus-visible:ring-secondary font-mono" {...field} />
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="••••••••"
+                      className="bg-background/50 border-secondary/50 focus-visible:ring-secondary font-mono"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

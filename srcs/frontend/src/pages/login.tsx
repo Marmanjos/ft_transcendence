@@ -51,7 +51,14 @@ export default function Login() {
                 <FormItem>
                   <FormLabel className="text-primary font-mono uppercase tracking-wider">Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="seu@email.com" className="bg-background/50 border-primary/50 focus-visible:ring-primary font-mono" {...field} />
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      placeholder="seu@email.com"
+                      className="bg-background/50 border-primary/50 focus-visible:ring-primary font-mono"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -64,7 +71,13 @@ export default function Login() {
                 <FormItem>
                   <FormLabel className="text-primary font-mono uppercase tracking-wider">Senha de Acesso</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="••••••••" className="bg-background/50 border-primary/50 focus-visible:ring-primary font-mono" {...field} />
+                    <Input
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                      className="bg-background/50 border-primary/50 focus-visible:ring-primary font-mono"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
