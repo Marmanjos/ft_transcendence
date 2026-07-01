@@ -1,21 +1,11 @@
-// srcs/frontend/src/pages/home.tsx
+// src/pages/home.tsx
 
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
-
-// Posições e tamanhos das faíscas — geradas uma vez, fora do render,
-// para não recalcular nada a cada frame (é só CSS a animar depois).
-const SPARKS = Array.from({ length: 18 }).map((_, i) => ({
-  id: i,
-  left: Math.random() * 100,
-  top: 40 + Math.random() * 50,
-  size: 2 + Math.random() * 3,
-  duration: 6 + Math.random() * 6,
-  delay: Math.random() * 8,
-  color: i % 2 === 0 ? "rgba(0,255,255,0.9)" : "rgba(168,85,247,0.9)",
-}));
+// ✅ Importa o novo componente
+import { NeonRingBackground } from "@/components/neonRingBackground";
 
 export default function Home() {
   const { user } = useAuth();
@@ -23,51 +13,8 @@ export default function Home() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col relative overflow-hidden scanlines">
-      {/* ✅ Fundo: ringue de boxe neon em CSS puro (sem imagens/JS) */}
-      <div className="neon-ring-bg">
-        <div className="ring-stage">
-          <div className="ring-floor" />
-
-          <div className="ring-ropes">
-            <div className="ring-rope h top-1" />
-            <div className="ring-rope h top-2" />
-            <div className="ring-rope h top-3" />
-            <div className="ring-rope h bot-1" />
-            <div className="ring-rope h bot-2" />
-            <div className="ring-rope h bot-3" />
-            <div className="ring-rope v left-1" />
-            <div className="ring-rope v left-2" />
-            <div className="ring-rope v left-3" />
-            <div className="ring-rope v right-1" />
-            <div className="ring-rope v right-2" />
-            <div className="ring-rope v right-3" />
-          </div>
-
-          <div className="ring-post tl" />
-          <div className="ring-post tr" />
-          <div className="ring-post bl" />
-          <div className="ring-post br" />
-        </div>
-
-        {SPARKS.map((s) => (
-          <span
-            key={s.id}
-            className="ring-spark"
-            style={{
-              left: `${s.left}%`,
-              top: `${s.top}%`,
-              width: s.size,
-              height: s.size,
-              background: s.color,
-              boxShadow: `0 0 6px ${s.color}`,
-              animationDuration: `${s.duration}s`,
-              animationDelay: `${s.delay}s`,
-            }}
-          />
-        ))}
-
-        <div className="ring-vignette" />
-      </div>
+      {/* ✅ Usa o componente (sem duplicação) */}
+      <NeonRingBackground sparkCount={18} />
 
       <div className="flex-1 flex flex-col items-center justify-center z-10 px-4">
         <motion.div

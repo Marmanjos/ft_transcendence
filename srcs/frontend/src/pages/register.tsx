@@ -1,3 +1,5 @@
+// src/pages/register.tsx
+
 import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -6,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/hooks/use-auth";
-import { ArenaBackground } from "@/components/arena-background";
+// ✅ Importa o novo componente
+import { NeonRingBackground } from "@/components/neonRingBackground";
 
 const registerSchema = z.object({
   username: z.string().min(3, { message: "O codinome deve ter pelo menos 3 caracteres" }),
@@ -36,8 +39,9 @@ export default function Register() {
 
   return (
     <div className="min-h-[100dvh] flex items-center justify-center p-4 relative scanlines">
-      <ArenaBackground />
-      
+      {/* ✅ Usa o componente (sem duplicação) */}
+      <NeonRingBackground sparkCount={15} />
+
       <div className="w-full max-w-md bg-card/80 backdrop-blur-xl border border-secondary/30 p-8 rounded-xl neon-box-secondary z-10">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-black tracking-widest text-secondary neon-text-secondary uppercase">Novo Combatente</h1>
