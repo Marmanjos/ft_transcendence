@@ -695,7 +695,6 @@ return (
 
     {!roomViewActive ? (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ... cards de criar/entrar sala ... */}
         <Card className="bg-card/60 border-primary/20 backdrop-blur">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 uppercase tracking-widest text-primary">
@@ -783,6 +782,19 @@ return (
         </div>
 
         {renderArena()}
+
+        {/* Botão "Abandonar Sala" - aparece quando está dentro de uma sala ativa */}
+        {roomViewActive && (
+          <div className="flex justify-center mt-4">
+            <Button 
+              variant="destructive" 
+              onClick={handleLeaveRoom}
+              className="w-full max-w-md uppercase tracking-widest font-bold"
+            >
+              <Users className="w-4 h-4 mr-2" /> Abandonar Sala
+            </Button>
+          </div>
+        )}
       </div>
     )}
   </div>
