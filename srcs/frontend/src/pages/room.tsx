@@ -309,6 +309,22 @@ export default function RoomPage() {
   };
 
   const handleLeaveRoom = () => {
+    // Se estiver em uma partida ativa, envia ABANDON_MATCH para o servidor
+    if (matchInfo && arenaState !== "MATCH_OVER") {
+      send({ 
+        type: "ABANDON_MATCH", 
+        matchId: matchInfo.matchId 
+      });
+      
+      // Mostra toast informando que abandonou
+      toast({ 
+        title: "Partida abandonada", 
+        description: `Você abandonou a partida. ${matchInfo.opponentUsername} venceu!`,
+        variant: "destructive" 
+      });
+    }
+    
+    // Limpa o estado local
     send({ type: "LEAVE_ROOM" });
     setRoomState(null);
     setActiveRoomCode("");
