@@ -1,3 +1,5 @@
+// ft_transcendence/srcs/frontend/src/App.tsx
+
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,7 +10,6 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 
 setBaseUrl(import.meta.env.VITE_API_BASE_URL?.trim() || null);
-
 setAuthTokenGetter(() => localStorage.getItem("elemental_duel_token"));
 
 import Home from "@/pages/home";
@@ -32,7 +33,8 @@ import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
 
-function Router() {
+// Componente para rotas que PRECISAM de layout
+function LayoutRoutes() {
   return (
     <Layout>
       <Switch>
@@ -43,46 +45,35 @@ function Router() {
         <Route path="/lobby">
           <ProtectedRoute><Lobby /></ProtectedRoute>
         </Route>
-        <Route path="/game/3v3">
-          <ProtectedRoute><Game3v3 /></ProtectedRoute>
-        </Route>
-        <Route path="/game/3v3/arena">
-          <ProtectedRoute><Game3v3Arena /></ProtectedRoute>
-        </Route>
-        <Route path="/game/multi">
-          <ProtectedRoute><GameMulti /></ProtectedRoute>
-        </Route>
-        <Route path="/game">
-          <ProtectedRoute><Game /></ProtectedRoute>
-        </Route>
-        <Route path="/room">
-          <ProtectedRoute><Room /></ProtectedRoute>
-        </Route>
-        <Route path="/room/3v3">
-          <ProtectedRoute><Room3v3 /></ProtectedRoute>
-        </Route>
+
         <Route path="/friends">
           <ProtectedRoute><Friends /></ProtectedRoute>
         </Route>
+
         <Route path="/groups">
           <ProtectedRoute><Groups /></ProtectedRoute>
         </Route>
+
         <Route path="/groups/:id">
           {params => <ProtectedRoute><GroupDetail id={Number(params.id)} /></ProtectedRoute>}
         </Route>
+
         <Route path="/history">
           <ProtectedRoute><History /></ProtectedRoute>
         </Route>
+
         <Route path="/leaderboard">
           <ProtectedRoute><Leaderboard /></ProtectedRoute>
         </Route>
+
         <Route path="/profile/:id">
           {params => <ProtectedRoute><Profile id={Number(params.id)} /></ProtectedRoute>}
         </Route>
+
         <Route path="/match/:id">
           {params => <ProtectedRoute><MatchDetail id={Number(params.id)} /></ProtectedRoute>}
         </Route>
-        
+
         <Route component={NotFound} />
       </Switch>
     </Layout>
@@ -95,7 +86,40 @@ function App() {
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AuthProvider>
-            <Router />
+            <Switch>
+              {/* Rotas SEM layout - coloque TODAS primeiro com paths específicos */}
+              <Route path="/room">
+                <ProtectedRoute><Room /></ProtectedRoute>
+              </Route>
+
+              <Route path="/room/3v3">
+                <ProtectedRoute><Room3v3 /></ProtectedRoute>
+              </Route>
+
+              <Route path="/game/3v3">
+                <ProtectedRoute><Game3v3 /></ProtectedRoute>
+              </Route>
+
+              <Route path="/game/3v3/arena">
+                <ProtectedRoute><Game3v3Arena /></ProtectedRoute>
+              </Route>
+
+              <Route path="/game/multi">
+                <ProtectedRoute><GameMulti /></ProtectedRoute>
+              </Route>
+
+              <Route path="/game">
+                <ProtectedRoute><Game /></ProtectedRoute>
+              </Route>
+
+              {/* Rota CURINGA para TODAS as outras páginas com layout */}
+              <Route path="/" nest>
+                <LayoutRoutes />
+              </Route>
+
+              {/* Fallback */}
+              <Route component={NotFound} />
+            </Switch>
           </AuthProvider>
         </WouterRouter>
         <Toaster />
