@@ -666,8 +666,15 @@ export default function RoomPage() {
       </div>
     );
   }
-  return (
-    <div className="max-w-6xl mx-auto space-y-8">
+
+// ft_transcendence/srcs/frontend/src/pages/room.tsx
+
+// ... todo o código anterior permanece igual ...
+
+return (
+  <div className="max-w-6xl mx-auto space-y-8">
+    {/* Cabeçalho - só aparece quando NÃO há dois jogadores na sala */}
+    {!canChat && (
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="font-mono text-primary uppercase tracking-[0.35em] text-xs mb-2">Multiplayer Online</p>
@@ -676,102 +683,107 @@ export default function RoomPage() {
             Cria uma sala, partilha o código e a arena começa quando o segundo jogador entra. O chat fica disponível na própria batalha.
           </p>
         </div>
-        <Button variant="outline" onClick={() => setLocation("/lobby")} className="w-fit uppercase tracking-widest font-bold">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Lobby
-        </Button>
+        
+        {/* Botão "Voltar ao Lobby" - só aparece quando NÃO está numa sala ativa */}
+        {!roomViewActive && (
+          <Button variant="outline" onClick={() => setLocation("/lobby")} className="w-fit uppercase tracking-widest font-bold">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Lobby
+          </Button>
+        )}
       </div>
+    )}
 
-      {!roomViewActive ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="bg-card/60 border-primary/20 backdrop-blur">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 uppercase tracking-widest text-primary">
-                <Plus className="w-5 h-5" /> Criar Sala
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground font-mono">Gera um código e espera o outro jogador entrar.</p>
-              <Button onClick={handleCreateRoom} disabled={busy && status === "creating"} className="w-full h-12 font-bold uppercase tracking-widest neon-box">
-                {status === "creating" ? "A criar..." : "Gerar Código da Sala"}
-              </Button>
+    {!roomViewActive ? (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ... cards de criar/entrar sala ... */}
+        <Card className="bg-card/60 border-primary/20 backdrop-blur">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 uppercase tracking-widest text-primary">
+              <Plus className="w-5 h-5" /> Criar Sala
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground font-mono">Gera um código e espera o outro jogador entrar.</p>
+            <Button onClick={handleCreateRoom} disabled={busy && status === "creating"} className="w-full h-12 font-bold uppercase tracking-widest neon-box">
+              {status === "creating" ? "A criar..." : "Gerar Código da Sala"}
+            </Button>
 
-              {roomState && (
-                <div className="space-y-3 rounded-xl border border-border p-4 bg-black/30">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-mono uppercase text-muted-foreground">Código da Sala</p>
-                      <p className="text-3xl font-black tracking-[0.35em] text-secondary">{roomState.code}</p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={handleCopyCode} className="uppercase tracking-widest font-bold">
-                      <Copy className="w-4 h-4 mr-2" /> Copiar
-                    </Button>
+            {roomState && (
+              <div className="space-y-3 rounded-xl border border-border p-4 bg-black/30">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-mono uppercase text-muted-foreground">Código da Sala</p>
+                    <p className="text-3xl font-black tracking-[0.35em] text-secondary">{roomState.code}</p>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs uppercase font-mono text-muted-foreground">Host</p>
-                      <p className="font-bold">{roomState.hostUsername}</p>
-                    </div>
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs uppercase font-mono text-muted-foreground">Convidado</p>
-                      <p className="font-bold">{roomState.guestUsername ?? "Aguardando..."}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm font-mono uppercase tracking-widest">
-                    <span className={`inline-block h-2.5 w-2.5 rounded-full ${roomState.canChat ? "bg-primary" : "bg-muted-foreground"}`} />
-                    {roomState.canChat ? "Sala pronta" : "Aguardando segundo jogador"}
-                  </div>
-                  <Button variant="outline" onClick={handleLeaveRoom} className="w-full uppercase tracking-widest font-bold">
-                    <Users className="w-4 h-4 mr-2" /> Sair da Sala
+                  <Button variant="outline" size="sm" onClick={handleCopyCode} className="uppercase tracking-widest font-bold">
+                    <Copy className="w-4 h-4 mr-2" /> Copiar
                   </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card/60 border-secondary/20 backdrop-blur">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 uppercase tracking-widest text-secondary">
-                <LogIn className="w-5 h-5" /> Entrar por Código
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground font-mono">Introduz o código e entra na sala do host.</p>
-              <input
-                value={roomCode}
-                onChange={(event) => setRoomCode(event.target.value.toUpperCase())}
-                placeholder="Ex: A7K2P9"
-                className="w-full h-12 rounded-md border border-border bg-background px-4 font-mono tracking-[0.3em] uppercase outline-none focus:border-secondary"
-              />
-              <Button onClick={handleJoinRoom} disabled={busy && status === "joining"} className="w-full h-12 font-bold uppercase tracking-widest neon-box">
-                {status === "joining" ? "A entrar..." : "Entrar na Sala"}
-              </Button>
-              <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground font-mono">
-                A sala cria a partida assim que estiverem dois jogadores online.
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-black/30 p-4">
-            <div>
-              <p className="text-xs font-mono uppercase text-muted-foreground">Sala</p>
-              <div className="flex items-center gap-3">
-                <p className="text-2xl font-black tracking-[0.35em] text-secondary">{roomState?.code ?? roomViewCode}</p>
-                <Button variant="outline" size="sm" onClick={handleCopyCode} className="uppercase tracking-widest font-bold">
-                  <Copy className="w-4 h-4 mr-2" /> Copiar
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs uppercase font-mono text-muted-foreground">Host</p>
+                    <p className="font-bold">{roomState.hostUsername}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs uppercase font-mono text-muted-foreground">Convidado</p>
+                    <p className="font-bold">{roomState.guestUsername ?? "Aguardando..."}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm font-mono uppercase tracking-widest">
+                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${roomState.canChat ? "bg-primary" : "bg-muted-foreground"}`} />
+                  {roomState.canChat ? "Sala pronta" : "Aguardando segundo jogador"}
+                </div>
+                <Button variant="outline" onClick={handleLeaveRoom} className="w-full uppercase tracking-widest font-bold">
+                  <Users className="w-4 h-4 mr-2" /> Sair da Sala
                 </Button>
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/60 border-secondary/20 backdrop-blur">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 uppercase tracking-widest text-secondary">
+              <LogIn className="w-5 h-5" /> Entrar por Código
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground font-mono">Introduz o código e entra na sala do host.</p>
+            <input
+              value={roomCode}
+              onChange={(event) => setRoomCode(event.target.value.toUpperCase())}
+              placeholder="Ex: A7K2P9"
+              className="w-full h-12 rounded-md border border-border bg-background px-4 font-mono tracking-[0.3em] uppercase outline-none focus:border-secondary"
+            />
+            <Button onClick={handleJoinRoom} disabled={busy && status === "joining"} className="w-full h-12 font-bold uppercase tracking-widest neon-box">
+              {status === "joining" ? "A entrar..." : "Entrar na Sala"}
+            </Button>
+            <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground font-mono">
+              A sala cria a partida assim que estiverem dois jogadores online.
             </div>
-            <div className="text-sm font-mono text-muted-foreground text-right">
-              <p>{roomState?.hostUsername ?? "A sincronizar..."} vs {roomState?.guestUsername ?? "..."}</p>
-              <p>{canChat ? "Chat ativo" : "Aguardando segundo jogador"}</p>
+          </CardContent>
+        </Card>
+      </div>
+    ) : (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-black/30 p-4">
+          <div>
+            <p className="text-xs font-mono uppercase text-muted-foreground">Sala</p>
+            <div className="flex items-center gap-3">
+              <p className="text-2xl font-black tracking-[0.35em] text-secondary">{roomState?.code ?? roomViewCode}</p>
+              <Button variant="outline" size="sm" onClick={handleCopyCode} className="uppercase tracking-widest font-bold">
+                <Copy className="w-4 h-4 mr-2" /> Copiar
+              </Button>
             </div>
           </div>
-
-          {renderArena()}
+          <div className="text-sm font-mono text-muted-foreground text-right">
+            <p>{roomState?.hostUsername ?? "A sincronizar..."} vs {roomState?.guestUsername ?? "..."}</p>
+            <p>{canChat ? "Chat ativo" : "Aguardando segundo jogador"}</p>
+          </div>
         </div>
-      )}
-    </div>
-  );
-}
+
+        {renderArena()}
+      </div>
+    )}
+  </div>
+);}
