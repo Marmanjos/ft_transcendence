@@ -1,3 +1,5 @@
+// src/pages/game.tsx
+
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { PauseMenu } from "@/components/pause-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { CombatScene } from "@/components/arena/CombatScene";
+// ✅ Substitui o CombatScene pelo NeonArena
+import { NeonArena } from "@/components/neonArena";
 import { Pause } from "lucide-react";
 
 declare global {
@@ -246,7 +249,7 @@ export default function Game() {
       const newMatch = await createMatch.mutateAsync({
         data: { 
           mode: MatchMode.SINGLE_PLAYER,
-          aiDifficulty: match.aiDifficulty 
+          aiDifficulty: match?.aiDifficulty 
         },
       });
       window.isMatchActive = false;
@@ -282,13 +285,13 @@ export default function Game() {
   return (
     <div className="min-h-[100dvh] w-full relative overflow-hidden bg-black text-white font-sans select-none">
 
-      {/* ── 3D ARENA ── */}
-      <CombatScene
+      {/* ── ARENA (NeonArena em vez de CombatScene) ── */}
+      <NeonArena
         gameState={gameState}
         playerElemental={roundResult?.playerChoice ?? selectedElemental}
         aiElemental={roundResult?.aiChoice ?? null}
         roundOutcome={roundResult?.outcome ?? null}
-        isPlayerWinner={isPlayerWinner}
+        countdown={countdown}
         onSelectElemental={handleSelectElemental}
       />
 
@@ -372,177 +375,6 @@ export default function Game() {
           </div>
         </motion.div>
       )}
-
-      {/* ── CENTER OVERLAYS ── */}
-      <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-        <AnimatePresence mode="wait">
-          {gameState === "COUNTDOWN" && (
-            <motion.div
-              key={`count-${countdown}`}
-              initial={{ scale: 1.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.5, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="text-[9rem] font-black leading-none"
-              style={{
-                color: "#00ffff",
-                textShadow: "0 0 40px #00ffff, 0 0 80px #00ffff50",
-              }}
-            >
-              {countdown > 0 ? countdown : "!"}
-            </motion.div>
-          )}
-
-          {gameState === "CLASH" && (
-            <motion.div
-              key="clash"
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: [0.5, 1.3, 1], opacity: [0, 1, 1] }}
-              transition={{ duration: 0.5 }}
-              className="flex flex-col items-center gap-4 relative"
-            >
-              <div
-                className="text-6xl md:text-8xl font-black uppercase tracking-widest"
-                style={{
-                  color: "#fff",
-                  textShadow: "0 0 40px #fff, 0 0 80px #00ffff",
-                }}
-              >
-                CLASH
-              </div>
-              <motion.div
-                initial={{ scale: 0, opacity: 1 }}
-                animate={{ scale: 4, opacity: 0 }}
-                transition={{ duration: 0.9 }}
-                className="w-20 h-20 rounded-full border-2 border-white absolute"
-              />
-            </motion.div>
-          )}
-
-          {gameState === "ROUND_RESULT" && roundResult && (
-            <motion.div
-              key="outcome"
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              transition={{ type: "spring", bounce: 0.4 }}
-              className={`px-8 py-4 border-4 font-black text-4xl md:text-5xl uppercase tracking-widest text-center
-                ${
-                  roundResult.outcome === RoundOutcome.WIN
-                    ? "border-primary text-primary"
-                    : roundResult.outcome === RoundOutcome.LOSS
-                    ? "border-destructive text-destructive"
-                    : "border-white/50 text-white/50"
-                }`}
-              style={{
-                boxShadow:
-                  roundResult.outcome === RoundOutcome.WIN
-                    ? "0 0 40px #00ffff, inset 0 0 40px rgba(0,255,255,0.1)"
-                    : roundResult.outcome === RoundOutcome.LOSS
-                    ? "0 0 40px #ff4444, inset 0 0 40px rgba(255,50,50,0.1)"
-                    : "none",
-                background: "rgba(0,0,0,0.6)",
-                backdropFilter: "blur(4px)",
-              }}
-            >
-              {roundResult.outcome === RoundOutcome.WIN
-                ? "VITÓRIA"
-                : roundResult.outcome === RoundOutcome.LOSS
-                ? "DERROTA"
-                : "EMPATE"}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── SELECTION HINT ── */}
-      <AnimatePresence>
-        {gameState === "SELECTING" && (
-          <motion.div
-            key="select-hint"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-8 left-0 right-0 z-30 flex flex-col items-center gap-2 pointer-events-none"
-          >
-            <p
-              className="font-mono uppercase tracking-[0.35em] text-xs"
-              style={{ color: "rgba(255,255,255,0.45)" }}
-            >
-              Clique em um combatente para selecionar
-            </p>
-            <div className="flex gap-8">
-              <span
-                className="font-mono text-xs font-bold tracking-widest"
-                style={{ color: "#f59e0b" }}
-              >
-                TITAN
-              </span>
-              <span
-                className="font-mono text-xs font-bold tracking-widest"
-                style={{ color: "#00ffff" }}
-              >
-                RAZOR
-              </span>
-              <span
-                className="font-mono text-xs font-bold tracking-widest"
-                style={{ color: "#bb00ff" }}
-              >
-                WRAITH
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── ROUND RESULT DETAILS ── */}
-      <AnimatePresence>
-        {gameState === "ROUND_RESULT" && roundResult && (
-          <motion.div
-            key="result-detail"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: 0.4 } }}
-            exit={{ opacity: 0 }}
-            className="absolute bottom-8 left-0 right-0 z-30 flex justify-center gap-12 pointer-events-none"
-          >
-            <div className="flex flex-col items-center gap-1">
-              <p
-                className="font-mono text-xs uppercase tracking-widest"
-                style={{ color: "rgba(255,255,255,0.4)" }}
-              >
-                Você
-              </p>
-              <p
-                className="font-mono font-bold text-sm uppercase"
-                style={{
-                  color:
-                    roundResult.outcome === RoundOutcome.WIN
-                      ? "#00ffff"
-                      : roundResult.outcome === RoundOutcome.LOSS
-                      ? "#ff4444"
-                      : "#ffffff80",
-                }}
-              >
-                {roundResult.playerChoice}
-              </p>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <p
-                className="font-mono text-xs uppercase tracking-widest"
-                style={{ color: "rgba(255,255,255,0.4)" }}
-              >
-                IA
-              </p>
-              <p
-                className="font-mono font-bold text-sm uppercase"
-                style={{ color: "rgba(255,255,255,0.5)" }}
-              >
-                {roundResult.aiChoice}
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ── MATCH OVER OVERLAY ── */}
       <AnimatePresence>

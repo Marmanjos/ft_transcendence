@@ -1,8 +1,11 @@
+// src/pages/home.tsx
+
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
-import { ArenaBackground } from "@/components/arena-background";
+// ✅ Importa o novo componente
+import { NeonRingBackground } from "@/components/neonRingBackground";
 
 export default function Home() {
   const { user } = useAuth();
@@ -10,10 +13,11 @@ export default function Home() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col relative overflow-hidden scanlines">
-      <ArenaBackground />
-      
+      {/* ✅ Usa o componente (sem duplicação) */}
+      <NeonRingBackground sparkCount={18} />
+
       <div className="flex-1 flex flex-col items-center justify-center z-10 px-4">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
@@ -25,11 +29,11 @@ export default function Home() {
           <p className="text-xl md:text-2xl text-cyan-400 font-mono tracking-widest mb-12 uppercase neon-text">
             Sobreviva à Arena. Domine os Elementos.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
             {user ? (
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="h-16 px-12 text-lg font-bold tracking-widest uppercase neon-box w-full sm:w-auto"
                 onClick={() => setLocation("/lobby")}
               >
@@ -37,16 +41,16 @@ export default function Home() {
               </Button>
             ) : (
               <>
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   className="h-16 px-12 text-lg font-bold tracking-widest uppercase neon-box w-full sm:w-auto"
                   onClick={() => setLocation("/register")}
                 >
                   Registrar
                 </Button>
-                <Button 
+                <Button
                   variant="outline"
-                  size="lg" 
+                  size="lg"
                   className="h-16 px-12 text-lg font-bold tracking-widest uppercase border-primary text-primary hover:bg-primary/20 w-full sm:w-auto"
                   onClick={() => setLocation("/login")}
                 >
