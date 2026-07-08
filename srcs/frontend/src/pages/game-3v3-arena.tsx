@@ -12,6 +12,8 @@ import { MatchManager, type Match, type RoundResult } from "@/lib/match-manager"
 import { useWs } from "@/hooks/use-ws";
 import { useToast } from "@/hooks/use-toast";
 import { PauseMenu } from "@/components/pause-menu";
+import { Users } from "lucide-react";
+import { clearRoomSession } from "@/lib/room-session";
 
 declare global {
   interface Window {
@@ -171,10 +173,12 @@ export default function Game3v3Arena() {
           setOpponentOffline(false);
           break;
         case "OPPONENT_DISCONNECTED":
+          clearRoomSession();
           toast({ title: "Oponente desconectou", description: "A partida foi cancelada.", variant: "destructive" });
           setLocation("/game/3v3");
           break;
         case "ROOM_CLOSED":
+          clearRoomSession();
           toast({ title: "Sala fechada", description: "O host fechou a sala.", variant: "destructive" });
           setLocation("/game/3v3");
           break;
@@ -216,8 +220,48 @@ export default function Game3v3Arena() {
   };
 
   const handleMainMenu = () => {
+    setArenaState("MATCH_OVER");
     setLocation("/game/3v3");
   };
+
+  // Adicione esta função dentro do componente Game3v3Arena
+const handleLeaveRoom = () => {
+  // 1. Marca que a partida não está mais ativa (IMEDIATAMENTE)
+  window.isMatchActive = false;
+  
+  // 2. Limpa o estado local (IMEDIATAMENTE)
+  setMatch(null);
+  setArenaState("SELECTING");
+  setYourChoice(null);
+  setRoundResult(null);
+  setFinalScores(null);
+  setOpponentOffline(false);
+  clearRoomSession();
+  
+  // 3. Tenta enviar ABANDON_MATCH (se possível)
+  if (match && matchId) {
+    try {
+      send({ 
+        type: "ABANDON_MATCH", 
+        matchId: Number(matchId) 
+      });
+    } catch (error) {
+      console.warn("Não foi possível enviar ABANDON_MATCH:", error);
+    }
+  }
+  
+  // 4. Mostra toast
+  toast({ 
+    title: "Partida abandonada", 
+    description: "Você abandonou a partida.",
+    variant: "destructive" 
+  });
+  
+  // 5. Navega para o lobby com um pequeno delay
+  setTimeout(() => {
+    setLocation("/game/3v3");
+  }, 150);
+};
 
   if (!match) {
     return (
@@ -267,12 +311,6 @@ export default function Game3v3Arena() {
               <p className="font-mono text-cyan-400 uppercase tracking-widest text-[10px] font-bold">{centerPlayer?.username} (Tu)</p>
               <p className="text-xs font-mono text-cyan-400 font-bold">Score: {centerScore}</p>
             </div>
-            <button
-              onClick={() => setPaused(true)}
-              className="mt-2 p-1.5 rounded border border-white/20 hover:border-red-500/60 text-white/40 hover:text-red-500 transition-colors"
-            >
-              <Pause className="w-4 h-4" />
-            </button>
           </div>
 
           <div className="flex flex-col items-end gap-1 min-w-[140px]">
@@ -374,6 +412,7 @@ export default function Game3v3Arena() {
                     </p>
                   </div>
                 </motion.div>
+                
               )}
             </AnimatePresence>
           </div>
@@ -407,6 +446,7 @@ export default function Game3v3Arena() {
                     </p>
                   </div>
                 </motion.div>
+                
               )}
               {arenaState === "ROUND_RESULT" && (
                 <motion.div
@@ -425,6 +465,15 @@ export default function Game3v3Arena() {
                 </motion.div>
               )}
             </AnimatePresence>
+              {arenaState !== "MATCH_OVER" && (
+              <div className="flex justify-center mt-6 pt-2 border-t border-red-500/20">
+                <Button onClick={handleLeaveRoom}
+                  variant="outline"
+                  className="w-full uppercase tracking-widest font-bold border-red-400/40 text-red-400 hover:bg-red-950/40">
+                  <Users className="w-4 h-4 mr-2" /> Sair da Sala
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -492,10 +541,7 @@ export default function Game3v3Arena() {
               </Button>
               <Button
                 onClick={handleMainMenu}
-                variant="outline"
-                size="lg"
-                className="flex-1 h-12 font-bold uppercase tracking-widest"
-              >
+                variant="outline" size="lg" className="flex-1 h-12 font-bold uppercase tracking-widest">
                 Setup
               </Button>
             </div>
@@ -546,60 +592,6 @@ export default function Game3v3Arena() {
               <p className="font-mono text-white/50 uppercase text-sm leading-relaxed">
                 Perdeste a ligação ao servidor.<br />A tentar restabelecer conexão...
               </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── PAUSE MENU ── */}
-      <AnimatePresence>
-        {paused && (
-          <PauseMenu
-            onResume={() => setPaused(false)}
-            onRestart={() => {
-              window.isMatchActive = false;
-              if (matchId) {
-                send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
-              }
-              setLocation("/game/3v3");
-            }}
-            onAbandon={handleConfirmAbandon}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── ABANDON CONFIRM MODAL ── */}
-      <AnimatePresence>
-        {showAbandonConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
-          >
-            <div className="flex flex-col items-center text-center p-10 border border-destructive/30 rounded-2xl bg-card max-w-sm w-full mx-4"
-              style={{ boxShadow: "0 0 60px rgba(255,0,0,0.15)" }}>
-              <div className="text-[10px] font-mono text-destructive uppercase tracking-[0.4em] mb-2">Alerta de Saída</div>
-              <h2 className="text-2xl font-black uppercase text-destructive mb-4">Abandonar Duelo?</h2>
-              <p className="font-mono text-xs text-white/50 mb-8 uppercase leading-relaxed">
-                Ação de navegação detectada. Sair agora irá registrar uma derrota por abandono.
-              </p>
-              <div className="flex flex-col gap-3 w-full">
-                <Button
-                  onClick={handleConfirmAbandon}
-                  className="w-full h-12 text-sm font-bold uppercase tracking-widest bg-destructive hover:bg-destructive/80 text-white"
-                  style={{ boxShadow: "0 0 20px rgba(255,0,0,0.3)" }}
-                >
-                  Confirmar Abandono
-                </Button>
-                <Button
-                  onClick={() => setShowAbandonConfirm(false)}
-                  variant="outline"
-                  className="w-full h-12 text-sm font-bold uppercase tracking-widest border-muted-foreground/30 text-white bg-transparent"
-                >
-                  Voltar ao Jogo
-                </Button>
-              </div>
             </div>
           </motion.div>
         )}

@@ -935,18 +935,21 @@ async function handleAbandonMatch(player: ConnectedPlayer, matchId: number) {
       rooms3v3.delete(matchId);
 
       await db.update(matchesTable)
-        .set({ 
-          status: "ABANDONED", 
-          completedAt: new Date() 
-        })
+        .set({ status: "ABANDONED", completedAt: new Date() })
         .where(eq(matchesTable.id, matchId))
         .catch((err) => logger.error({ err }, "Failed to update 3v3 match on voluntary abandon"));
 
+      // Destruir a PartyRoom por completo, para todos, independente de quem abandonou
       const partyRoom = Array.from(partyRooms.values()).find((r) => r.matchId === matchId);
       if (partyRoom) {
-        partyRoom.matchId = null;
-        broadcastPartyRoomState(partyRoom);
+        const memberIds = [partyRoom.host.userId, ...partyRoom.guests.map((g) => g.userId)];
+        for (const id of memberIds) {
+          sendToUser(id, { type: "ROOM_CLOSED", code: partyRoom.code, reason: "closed" });
+          playerPartyRoom.delete(id);
+        }
+        partyRooms.delete(partyRoom.code);
       }
+
       logger.info({ matchId, userId: player.userId }, "Player voluntarily abandoned 3v3 match");
     }
   }
