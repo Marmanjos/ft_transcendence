@@ -176,9 +176,11 @@ export default function Room3v3Page() {
               Cria uma sala, entra com um código e depois ficas apenas na sala ativa até saires ou a apagares.
             </p>
           </div>
-          <Button variant="outline" onClick={() => setLocation("/game/3v3")} className="uppercase tracking-widest font-bold">
-            <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
-          </Button>
+          {!roomViewActive && (
+            <Button variant="outline" onClick={() => setLocation("/game/3v3")} className="uppercase tracking-widest font-bold">
+              <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
+            </Button>
+          )}
         </div>
 
         {!roomViewActive ? (
