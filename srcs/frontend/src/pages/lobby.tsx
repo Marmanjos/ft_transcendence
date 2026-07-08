@@ -84,7 +84,7 @@ export default function Lobby() {
             className="h-14 px-6 text-base font-bold uppercase tracking-widest neon-box w-full sm:w-auto"
           >
             <Bot className="w-5 h-5 mr-2" />
-            {createMatch.isPending ? "Inicializando..." : "VS Inteligência Artificial"}
+            {createMatch.isPending ? "Inicializando..." : "vs AI"}
           </Button>
           <Button
             size="lg"
