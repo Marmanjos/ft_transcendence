@@ -60,6 +60,7 @@ export default function RoomPage() {
   const persistedRoom = loadRoomSession();
   const initialRoomCode = initialCode || (persistedRoom?.path === ROOM_PATH ? persistedRoom.code : "");
   const autoJoinSent = useRef(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (persistedRoom && persistedRoom.path !== ROOM_PATH) {
@@ -95,6 +96,10 @@ export default function RoomPage() {
   const opponentScore = matchInfo?.yourSide === "player1" ? scores.player2Score : scores.player1Score;
   const isWinner = matchOver ? (matchInfo?.yourSide === "player1" ? matchOver.winnerId === user?.id : matchOver.winnerId === user?.id) : false;
   const isDraw = matchOver?.winnerId === null;
+
+
+  const openModal = () => dialogRef.current?.showModal();
+  const closeModal = () => dialogRef.current?.close();
 
   useEffect(() => {
     const off = onMessage((msg: ServerMsg) => {
@@ -323,12 +328,11 @@ export default function RoomPage() {
         variant: "destructive" 
       });
     }
-    
+    clearRoomSession();
     // Limpa o estado local
     send({ type: "LEAVE_ROOM" });
     setRoomState(null);
     setActiveRoomCode("");
-    clearRoomSession();
     setMatchInfo(null);
     setMessages([]);
     setDraft("");
@@ -340,6 +344,11 @@ export default function RoomPage() {
     setStatus("idle");
     setChatOpen(false);
     setLocation(ROOM_PATH);
+  };
+
+  const handleConfirmLeave = () => {
+    handleLeaveRoom(); // Executa a tua função original
+    closeModal();      // Fecha o popup
   };
 
   const handleSelect = (elemental: Elemental) => {
@@ -558,7 +567,7 @@ export default function RoomPage() {
               <div className="flex flex-col items-center text-center gap-6 p-10 border border-border rounded-2xl bg-card/80 max-w-md mx-4">
                 <h2 className="text-4xl font-black uppercase tracking-widest text-primary neon-text">Oponente saiu</h2>
                 <p className="font-mono text-white/50 uppercase text-sm">O teu adversário abandonou a sala.</p>
-                <Button onClick={() => setLocation("/lobby")} size="lg" className="h-12 px-10 font-bold uppercase tracking-widest neon-box">Voltar ao Lobby</Button>
+                <Button onClick={() => {handleLeaveRoom(); setLocation("/lobby");}} size="lg" className="h-12 px-10 font-bold uppercase tracking-widest neon-box">Voltar ao Lobby</Button>
               </div>
             </motion.div>
           )}
@@ -801,14 +810,41 @@ return (
 
         {/* Botão "Abandonar Sala" - aparece quando está dentro de uma sala ativa */}
         {roomViewActive && (
-          <div className="flex justify-center mt-4">
+        <div className="flex justify-center mt-4">
+            {/* Botão principal que agora abre o popup */}
             <Button
-              onClick={handleLeaveRoom}
-                variant="outline"
-                  className="w-full uppercase tracking-widest font-bold border-red-400/40 text-red-400 hover:bg-red-950/40"
-                >
+              onClick={openModal}
+              variant="outline"
+              className="w-full uppercase tracking-widest font-bold border-red-400/40 text-red-400 hover:bg-red-950/40"
+            >
               <Users className="w-4 h-4 mr-2" /> Sair da Sala
             </Button>
+
+            {/* Estutura do Popup (Modal) */}
+            <dialog
+              ref={dialogRef}
+              className="p-6 rounded-lg bg-zinc-900 text-white border border-zinc-800 backdrop:bg-black/60 backdrop:backdrop-blur-sm max-w-md w-full"
+            >
+              <h3 className="text-lg font-bold mb-2">Tens a certeza?</h3>
+              <p className="text-zinc-400 text-sm mb-6">
+                Esta ação vai retirar-te da sala atual.
+              </p>
+              
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={closeModal}
+                  className="px-4 py-2 text-sm font-medium rounded hover:bg-zinc-800 text-zinc-300"
+                >
+                  Permanecer
+                </button>
+                <button
+                  onClick={handleConfirmLeave}
+                  className="px-4 py-2 text-sm font-medium rounded bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Sair da Sala
+                </button>
+              </div>
+            </dialog>
           </div>
         )}
       </div>
