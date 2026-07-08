@@ -45,6 +45,10 @@ export default function Game3v3Arena() {
   const [opponentOffline, setOpponentOffline] = useState(false);
   const [offlineCountdown, setOfflineCountdown] = useState(8);
   const [finalScores, setFinalScores] = useState<Record<string, number> | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  const openModal = () => dialogRef.current?.showModal();
+  const closeModal = () => dialogRef.current?.close();
 
   useEffect(() => {
     if (!opponentOffline) return undefined;
@@ -86,6 +90,7 @@ export default function Game3v3Arena() {
     if (matchId) {
       send({ type: "ABANDON_MATCH", matchId: Number(matchId) });
     }
+    clearRoomSession();
     setLocation("/lobby");
   };
 
@@ -175,11 +180,13 @@ export default function Game3v3Arena() {
         case "OPPONENT_DISCONNECTED":
           clearRoomSession();
           toast({ title: "Oponente desconectou", description: "A partida foi cancelada.", variant: "destructive" });
+          handleLeaveRoom();
           setLocation("/game/3v3");
           break;
         case "ROOM_CLOSED":
           clearRoomSession();
           toast({ title: "Sala fechada", description: "O host fechou a sala.", variant: "destructive" });
+          handleLeaveRoom();
           setLocation("/game/3v3");
           break;
       }
@@ -216,52 +223,60 @@ export default function Game3v3Arena() {
   };
 
   const handleRestart = () => {
+    handleLeaveRoom();
     setLocation("/game/3v3");
   };
 
   const handleMainMenu = () => {
     setArenaState("MATCH_OVER");
+    handleLeaveRoom();
     setLocation("/game/3v3");
   };
 
   // Adicione esta função dentro do componente Game3v3Arena
-const handleLeaveRoom = () => {
-  // 1. Marca que a partida não está mais ativa (IMEDIATAMENTE)
-  window.isMatchActive = false;
-  
-  // 2. Limpa o estado local (IMEDIATAMENTE)
-  setMatch(null);
-  setArenaState("SELECTING");
-  setYourChoice(null);
-  setRoundResult(null);
-  setFinalScores(null);
-  setOpponentOffline(false);
-  clearRoomSession();
-  
-  // 3. Tenta enviar ABANDON_MATCH (se possível)
-  if (match && matchId) {
-    try {
-      send({ 
-        type: "ABANDON_MATCH", 
-        matchId: Number(matchId) 
-      });
-    } catch (error) {
-      console.warn("Não foi possível enviar ABANDON_MATCH:", error);
+  const handleLeaveRoom = () => {
+    // 1. Marca que a partida não está mais ativa (IMEDIATAMENTE)
+    window.isMatchActive = false;
+    
+    // 2. Limpa o estado local (IMEDIATAMENTE)
+    clearRoomSession();
+    setMatch(null);
+    setArenaState("SELECTING");
+    setYourChoice(null);
+    setRoundResult(null);
+    setFinalScores(null);
+    setOpponentOffline(false);
+    
+    // 3. Tenta enviar ABANDON_MATCH (se possível)
+    if (match && matchId) {
+      try {
+        send({ 
+          type: "ABANDON_MATCH", 
+          matchId: Number(matchId) 
+        });
+      } catch (error) {
+        console.warn("Não foi possível enviar ABANDON_MATCH:", error);
+      }
     }
-  }
-  
-  // 4. Mostra toast
-  toast({ 
-    title: "Partida abandonada", 
-    description: "Você abandonou a partida.",
-    variant: "destructive" 
-  });
-  
-  // 5. Navega para o lobby com um pequeno delay
-  setTimeout(() => {
-    setLocation("/game/3v3");
-  }, 150);
-};
+    
+    // 4. Mostra toast
+    toast({ 
+      title: "Partida abandonada", 
+      description: "Você abandonou a partida.",
+      variant: "destructive" 
+    });
+    
+    // 5. Navega para o lobby com um pequeno delay
+    setTimeout(() => {
+      clearRoomSession();
+      setLocation("/game/3v3");
+    }, 150);
+  };
+
+  const handleConfirmLeave = () => {
+    handleLeaveRoom(); // Executa a tua função original
+    closeModal();      // Fecha o popup
+  };
 
   if (!match) {
     return (
@@ -466,13 +481,42 @@ const handleLeaveRoom = () => {
               )}
             </AnimatePresence>
               {arenaState !== "MATCH_OVER" && (
-              <div className="flex justify-center mt-6 pt-2 border-t border-red-500/20">
-                <Button onClick={handleLeaveRoom}
-                  variant="outline"
-                  className="w-full uppercase tracking-widest font-bold border-red-400/40 text-red-400 hover:bg-red-950/40">
-                  <Users className="w-4 h-4 mr-2" /> Sair da Sala
-                </Button>
+        <div className="flex justify-center mt-4">
+            {/* Botão principal que agora abre o popup */}
+            <Button
+              onClick={openModal}
+              variant="outline"
+              className="w-full uppercase tracking-widest font-bold border-red-400/40 text-red-400 hover:bg-red-950/40"
+            >
+              <Users className="w-4 h-4 mr-2" /> Sair da Sala
+            </Button>
+
+            {/* Estutura do Popup (Modal) */}
+            <dialog
+              ref={dialogRef}
+              className="p-6 rounded-lg bg-zinc-900 text-white border border-zinc-800 backdrop:bg-black/60 backdrop:backdrop-blur-sm max-w-md w-full"
+            >
+              <h3 className="text-lg font-bold mb-2">Tens a certeza?</h3>
+              <p className="text-zinc-400 text-sm mb-6">
+                Esta ação vai retirar-te da sala atual.
+              </p>
+              
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={closeModal}
+                  className="px-4 py-2 text-sm font-medium rounded hover:bg-zinc-800 text-zinc-300"
+                >
+                  Permanecer
+                </button>
+                <button
+                  onClick={handleConfirmLeave}
+                  className="px-4 py-2 text-sm font-medium rounded bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Sair da Sala
+                </button>
               </div>
+            </dialog>
+          </div>
             )}
           </div>
         </div>
