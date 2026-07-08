@@ -1,8 +1,9 @@
 DOCKER = docker
 COMPOSE = $(DOCKER) compose -f srcs/docker-compose.yml
 PROJECT_URL = http://localhost
+DATA_DIRS = /home/atambo/data/backend /home/atambo/data/database
 
-all:
+all: setup
 	$(COMPOSE) build --no-cache --pull
 	$(COMPOSE) up -d --force-recreate
 
@@ -14,6 +15,9 @@ create:
 
 	@printf '%s\n' \
 		'VITE_API_BASE_URL=http://localhost:3001' > srcs/frontend/.env
+
+setup:
+	@mkdir -p $(DATA_DIRS)
 
 status:
 	@echo '\nIMAGES:'
