@@ -823,7 +823,7 @@ return (
             {/* Estutura do Popup (Modal) */}
             <dialog
               ref={dialogRef}
-              className="p-6 rounded-lg bg-zinc-900 text-white border border-zinc-800 backdrop:bg-black/60 backdrop:backdrop-blur-sm max-w-md w-full"
+              className="fixed inset-0 m-auto p-6 rounded-lg bg-zinc-900 text-white border border-zinc-800 backdrop:bg-black/60 backdrop:backdrop-blur-sm max-w-md w-full"
             >
               <h3 className="text-lg font-bold mb-2">Tens a certeza?</h3>
               <p className="text-zinc-400 text-sm mb-6">
