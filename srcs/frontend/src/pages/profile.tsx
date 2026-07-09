@@ -184,7 +184,6 @@ export default function Profile({ id }: { id: number }) {
   if (!user) {
     return <div className="text-center py-20 font-mono text-muted-foreground uppercase">Perfil não encontrado.</div>;
   }
-  console.log("User data:", user);
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row items-center gap-8 bg-card/50 border border-primary/20 p-8 rounded-xl backdrop-blur relative overflow-hidden">
