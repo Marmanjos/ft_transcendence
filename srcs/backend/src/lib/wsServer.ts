@@ -103,6 +103,14 @@ const rematchOffers = new Map<number, { player1: ConnectedPlayer; player2: Conne
 const userSockets = new Map<number, Set<WebSocket>>();
 const disconnectTimeouts = new Map<number, NodeJS.Timeout>();
 
+function clearDisconnectGrace(userId: number) {
+  const timeout = disconnectTimeouts.get(userId);
+  if (!timeout) return;
+
+  clearTimeout(timeout);
+  disconnectTimeouts.delete(userId);
+}
+
 function send(ws: WebSocket, msg: ServerMsg) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
@@ -268,6 +276,86 @@ function broadcastPartyRoomState(room: PartyRoom) {
 function broadcastPartyRoomChat(room: PartyRoom, message: PartyRoomMessage) {
   const userIds = [room.host.userId, ...room.guests.map((guest) => guest.userId)];
   broadcastToUsers(userIds, { type: "ROOM_CHAT" as const, code: room.code, ...message });
+}
+
+function clearPartyRoomMatch(room: PartyRoom) {
+  if (room.matchId === null) return;
+
+  room.matchId = null;
+  broadcastPartyRoomState(room);
+}
+
+async function finalize1v1Forfeit(matchId: number, quitterId: number) {
+  clearDisconnectGrace(quitterId);
+
+  const room = rooms.get(matchId);
+  if (!room) return;
+
+  const isPlayer1 = room.player1.userId === quitterId;
+  const isPlayer2 = room.player2.userId === quitterId;
+  if (!isPlayer1 && !isPlayer2) return;
+
+  const winner = isPlayer1 ? room.player2 : room.player1;
+  const loser = isPlayer1 ? room.player1 : room.player2;
+  const partyRoom = Array.from(partyRooms.values()).find((r) => r.matchId === matchId);
+
+  await db
+    .update(matchesTable)
+    .set({
+      status: "COMPLETED",
+      winnerId: winner.userId,
+      completedAt: new Date(),
+    })
+    .where(eq(matchesTable.id, matchId))
+    .catch((err: unknown) => logger.error({ err }, "Failed to finalize match after forfeit timeout"));
+
+  sendToUser(winner.userId, {
+    type: "MATCH_OVER",
+    winnerId: winner.userId,
+    player1Score: room.player1Score,
+    player2Score: room.player2Score,
+  });
+  sendToUser(loser.userId, {
+    type: "MATCH_OVER",
+    winnerId: winner.userId,
+    player1Score: room.player1Score,
+    player2Score: room.player2Score,
+  });
+
+  if (partyRoom) {
+    clearPartyRoomMatch(partyRoom);
+
+    setTimeout(() => {
+      const memberIds = [partyRoom.host.userId, ...partyRoom.guests.map((guest) => guest.userId)];
+      for (const id of memberIds) {
+        sendToUser(id, { type: "ROOM_CLOSED", code: partyRoom.code, reason: "closed" });
+        playerPartyRoom.delete(id);
+      }
+      partyRooms.delete(partyRoom.code);
+    }, 3000);
+  }
+
+  rooms.delete(matchId);
+  rematchOffers.delete(matchId);
+
+  logger.info({ matchId, quitterId, winnerId: winner.userId }, "1v1 match finalized after forfeit timeout");
+}
+
+function start1v1GracePeriod(room: Room, quitterId: number, reason: "disconnect" | "abandon") {
+  if (disconnectTimeouts.has(quitterId)) {
+    return;
+  }
+
+  const matchId = room.matchId;
+  const opponent = room.player1.userId === quitterId ? room.player2 : room.player1;
+  send(opponent.ws, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
+
+  const timeout = setTimeout(() => {
+    void finalize1v1Forfeit(matchId, quitterId);
+  }, 8000);
+
+  disconnectTimeouts.set(quitterId, timeout);
+  logger.info({ matchId: room.matchId, userId: quitterId, reason }, "Started 1v1 grace period");
 }
 
 function resolveRound3v3(p1: string, p2: string, p3: string): {
@@ -816,6 +904,12 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
       const p1 = room.player1;
       const p2 = room.player2;
       const finishedMatchId = room.matchId;
+      const partyRoom = Array.from(partyRooms.values()).find((r) => r.matchId === finishedMatchId);
+
+      if (partyRoom) {
+        clearPartyRoomMatch(partyRoom);
+      }
+
       setTimeout(() => {
         const userIds = [p1.userId, p2.userId];
         broadcastToUsers(userIds, { type: "MATCH_OVER", winnerId, player1Score: room.player1Score, player2Score: room.player2Score });
@@ -903,21 +997,7 @@ async function handleAbandonMatch(player: ConnectedPlayer, matchId: number) {
     const isPlayer1 = room.player1.userId === player.userId;
     const isPlayer2 = room.player2.userId === player.userId;
     if (isPlayer1 || isPlayer2) {
-      const opponent = isPlayer1 ? room.player2 : room.player1;
-      const winnerId = isPlayer1 ? room.player2.userId : room.player1.userId;
-
-      send(opponent.ws, { type: "OPPONENT_DISCONNECTED" });
-      rooms.delete(matchId);
-
-      await db.update(matchesTable)
-        .set({ 
-          status: "COMPLETED", 
-          winnerId,
-          completedAt: new Date() 
-        })
-        .where(eq(matchesTable.id, matchId))
-        .catch((err) => logger.error({ err }, "Failed to update match on voluntary abandon"));
-
+      start1v1GracePeriod(room, player.userId, "abandon");
       logger.info({ matchId, userId: player.userId }, "Player voluntarily abandoned 1v1 match");
     }
     return;
@@ -985,17 +1065,9 @@ function handleDisconnect(userId: number) {
   if (!found) return;
 
   const { room, side } = found;
-  const opponent = side === "player1" ? room.player2 : room.player1;
+  start1v1GracePeriod(room, userId, "disconnect");
 
-  send(opponent.ws, { type: "OPPONENT_DISCONNECTED" });
-  rooms.delete(room.matchId);
-
-  db.update(matchesTable)
-    .set({ status: "COMPLETED", completedAt: new Date() })
-    .where(eq(matchesTable.id, room.matchId))
-    .catch((err) => logger.error({ err }, "Failed to update match on disconnect"));
-
-  logger.info({ matchId: room.matchId, userId }, "Player disconnected from match");
+  logger.info({ matchId: room.matchId, userId, side }, "Player disconnected from match");
 }
 
 export function attachWsServer(server: Server) {

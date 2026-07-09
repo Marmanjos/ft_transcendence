@@ -222,7 +222,11 @@ export default function RoomPage() {
           setBusy(false);
           setChatOpen(false);
           setLocation(ROOM_PATH);
-          toast({ title: "Sala fechada", description: "A sala foi encerrada pelo host.", variant: "destructive" });
+          toast({
+            title: "Sala fechada",
+            description: msg.reason === "host_left" ? "A sala foi encerrada pelo host." : "A sala foi encerrada.",
+            variant: "destructive",
+          });
           break;
         case "ROOM_FULL":
           setBusy(false);
@@ -314,22 +318,35 @@ export default function RoomPage() {
   };
 
   const handleLeaveRoom = () => {
-    // Se estiver em uma partida ativa, envia ABANDON_MATCH para o servidor
-    if (matchInfo && arenaState !== "MATCH_OVER") {
-      send({ 
-        type: "ABANDON_MATCH", 
-        matchId: matchInfo.matchId 
+    const isActiveMatch = Boolean(matchInfo && arenaState !== "MATCH_OVER");
+
+    if (isActiveMatch && matchInfo) {
+      send({ type: "ABANDON_MATCH", matchId: matchInfo.matchId });
+
+      toast({
+        title: "Saída registada",
+        description: "O oponente tem alguns segundos para voltar antes do timeout.",
+        variant: "destructive",
       });
-      
-      // Mostra toast informando que abandonou
-      toast({ 
-        title: "Partida abandonada", 
-        description: `Você abandonou a partida. ${matchInfo.opponentUsername} venceu!`,
-        variant: "destructive" 
-      });
+
+      clearRoomSession();
+      setRoomState(null);
+      setActiveRoomCode("");
+      setMatchInfo(null);
+      setMessages([]);
+      setDraft("");
+      setSelectedElemental(null);
+      setRoundResult(null);
+      setMatchOver(null);
+      setScores({ player1Score: 0, player2Score: 0 });
+      setArenaState("MATCH_FOUND");
+      setStatus("idle");
+      setChatOpen(false);
+      setLocation("/lobby");
+      return;
     }
+
     clearRoomSession();
-    // Limpa o estado local
     send({ type: "LEAVE_ROOM" });
     setRoomState(null);
     setActiveRoomCode("");
