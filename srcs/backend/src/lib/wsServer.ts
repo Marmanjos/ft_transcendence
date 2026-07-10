@@ -99,7 +99,7 @@ const playerPartyRoom = new Map<number, string>();
 // rematchOffers: matchId → set of userIds that offered rematch
 const rematchOffers = new Map<number, { player1: ConnectedPlayer; player2: ConnectedPlayer; offered: Set<number> }>();
 
-// Tracking active sockets and grace period disconnect timeouts
+// Tracking active sockets and grace period disconnect timeouts.
 const userSockets = new Map<number, Set<WebSocket>>();
 const disconnectTimeouts = new Map<number, NodeJS.Timeout>();
 
@@ -285,7 +285,7 @@ function clearPartyRoomMatch(room: PartyRoom) {
   broadcastPartyRoomState(room);
 }
 
-async function finalize1v1Forfeit(matchId: number, quitterId: number) {
+async function finalize1v1Forfeit(matchId: number, quitterId: number, reason: "disconnect_timeout" | "abandon" = "disconnect_timeout") {
   clearDisconnectGrace(quitterId);
 
   const room = rooms.get(matchId);
@@ -307,7 +307,7 @@ async function finalize1v1Forfeit(matchId: number, quitterId: number) {
       completedAt: new Date(),
     })
     .where(eq(matchesTable.id, matchId))
-    .catch((err: unknown) => logger.error({ err }, "Failed to finalize match after forfeit timeout"));
+    .catch((err: unknown) => logger.error({ err }, "Failed to finalize match after forfeit"));
 
   sendToUser(winner.userId, {
     type: "MATCH_OVER",
@@ -338,10 +338,13 @@ async function finalize1v1Forfeit(matchId: number, quitterId: number) {
   rooms.delete(matchId);
   rematchOffers.delete(matchId);
 
-  logger.info({ matchId, quitterId, winnerId: winner.userId }, "1v1 match finalized after forfeit timeout");
+  logger.info({ matchId, quitterId, winnerId: winner.userId, reason }, "1v1 match finalized");
 }
 
-function start1v1GracePeriod(room: Room, quitterId: number, reason: "disconnect" | "abandon") {
+// Used only for genuine (accidental) disconnects. Gives the disconnected player 8s
+// to reconnect before the match is forfeited. A voluntary abandon has no grace period
+// at all - see handleAbandonMatch, which finalizes the forfeit immediately.
+function startDisconnectGracePeriod(room: Room, quitterId: number) {
   if (disconnectTimeouts.has(quitterId)) {
     return;
   }
@@ -351,11 +354,11 @@ function start1v1GracePeriod(room: Room, quitterId: number, reason: "disconnect"
   send(opponent.ws, { type: "OPPONENT_TEMPORARILY_DISCONNECTED" });
 
   const timeout = setTimeout(() => {
-    void finalize1v1Forfeit(matchId, quitterId);
+    void finalize1v1Forfeit(matchId, quitterId, "disconnect_timeout");
   }, 8000);
 
   disconnectTimeouts.set(quitterId, timeout);
-  logger.info({ matchId: room.matchId, userId: quitterId, reason }, "Started 1v1 grace period");
+  logger.info({ matchId: room.matchId, userId: quitterId }, "Started 1v1 disconnect grace period");
 }
 
 function resolveRound3v3(p1: string, p2: string, p3: string): {
@@ -997,8 +1000,11 @@ async function handleAbandonMatch(player: ConnectedPlayer, matchId: number) {
     const isPlayer1 = room.player1.userId === player.userId;
     const isPlayer2 = room.player2.userId === player.userId;
     if (isPlayer1 || isPlayer2) {
-      start1v1GracePeriod(room, player.userId, "abandon");
-      logger.info({ matchId, userId: player.userId }, "Player voluntarily abandoned 1v1 match");
+      // Voluntary abandon is a final, already-confirmed decision (the client asks
+      // "Tens a certeza?" before sending this) - no grace period, instant win for
+      // whoever remains.
+      await finalize1v1Forfeit(matchId, player.userId, "abandon");
+      logger.info({ matchId, userId: player.userId }, "Player voluntarily abandoned 1v1 match; instant forfeit");
     }
     return;
   }
@@ -1035,10 +1041,25 @@ async function handleAbandonMatch(player: ConnectedPlayer, matchId: number) {
   }
 }
 
+function startPartyRoomDisconnectGrace(userId: number) {
+  if (disconnectTimeouts.has(userId)) {
+    return;
+  }
+
+  const timeout = setTimeout(() => {
+    disconnectTimeouts.delete(userId);
+    detachPlayerFromPartyRoom(userId, "host_left");
+    logger.info({ userId }, "Player removed from party room after grace period");
+  }, 8000);
+
+  disconnectTimeouts.set(userId, timeout);
+}
+
 function handleDisconnect(userId: number) {
   if (waitingPlayer?.userId === userId) {
     waitingPlayer = null;
     logger.info({ userId }, "Player left queue on disconnect");
+    detachPlayerFromPartyRoom(userId, "host_left");
     return;
   }
 
@@ -1062,12 +1083,20 @@ function handleDisconnect(userId: number) {
   }
 
   const found = getRoomForPlayer(userId);
-  if (!found) return;
+  if (found) {
+    const { room, side } = found;
+    // Single grace period for the whole disconnect -> forfeit flow. If the player
+    // reconnects before it elapses, the "connection" handler cancels this timer and
+    // nothing else happens. The party room is only ever closed by finalize1v1Forfeit,
+    // i.e. once the grace period has genuinely run out without a reconnection.
+    startDisconnectGracePeriod(room, userId);
+    logger.info({ matchId: room.matchId, userId, side }, "Player disconnected from match; grace period started");
+    return;
+  }
 
-  const { room, side } = found;
-  start1v1GracePeriod(room, userId, "disconnect");
-
-  logger.info({ matchId: room.matchId, userId, side }, "Player disconnected from match");
+  // Not in queue, not in an active 1v1/3v3 match: no match-forfeit grace applies here,
+  // but we still give a single grace period before evicting the player from the party room.
+  startPartyRoomDisconnectGrace(userId);
 }
 
 export function attachWsServer(server: Server) {
@@ -1184,7 +1213,9 @@ export function attachWsServer(server: Server) {
       }
       sockets.add(ws);
 
-      // Cancel disconnection grace period if active
+      // Cancel disconnection grace period if active. Only genuine disconnects ever
+      // reach this map (a voluntary abandon finalizes instantly, see
+      // handleAbandonMatch), so any pending entry here is always safe to cancel.
       const timeout = disconnectTimeouts.get(user.id);
       if (timeout) {
         clearTimeout(timeout);
@@ -1267,15 +1298,13 @@ export function attachWsServer(server: Server) {
               }
             }
 
-            // Start grace period timeout (8 seconds)
-            logger.info({ userId }, "All client sockets disconnected; starting grace period timeout");
-            const timeout = setTimeout(() => {
-              disconnectTimeouts.delete(userId);
-              handleDisconnect(userId);
-              detachPlayerFromPartyRoom(userId, "host_left");
-              logger.info({ userId }, "Player disconnected permanently after grace period");
-            }, 8000);
-            disconnectTimeouts.set(userId, timeout);
+            // Evaluate the single grace period immediately. handleDisconnect decides
+            // whether a match-forfeit grace applies (startDisconnectGracePeriod, 8s) or a
+            // plain party-room grace applies (startPartyRoomDisconnectGrace, 8s) -
+            // never both stacked on top of each other. Voluntary abandons never reach
+            // here at all; they finalize instantly via handleAbandonMatch.
+            logger.info({ userId }, "All client sockets disconnected; evaluating grace period");
+            handleDisconnect(userId);
           } else {
             logger.info({ userId, remainingSockets: sockets.size }, "Client closed one socket, other sockets still active");
           }

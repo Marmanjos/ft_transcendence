@@ -324,8 +324,8 @@ export default function RoomPage() {
       send({ type: "ABANDON_MATCH", matchId: matchInfo.matchId });
 
       toast({
-        title: "Saída registada",
-        description: "O oponente tem alguns segundos para voltar antes do timeout.",
+        title: "Partida abandonada",
+        description: "Perdeste a partida por abandono. O adversário venceu.",
         variant: "destructive",
       });
 
@@ -708,10 +708,6 @@ export default function RoomPage() {
       </div>
     );
   }
-
-// ft_transcendence/srcs/frontend/src/pages/room.tsx
-
-// ... todo o código anterior permanece igual ...
 
 return (
   <div className="max-w-6xl mx-auto space-y-8">
