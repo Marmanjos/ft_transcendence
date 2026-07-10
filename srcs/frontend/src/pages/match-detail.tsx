@@ -3,6 +3,7 @@ import { RoundOutcome, Elemental, MatchStatus } from "@workspace/api-client-reac
 import { Card, CardContent } from "@/components/ui/card";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useAuth } from "@/hooks/use-auth";
 
 const ElementalName = {
   [Elemental.TITAN]: "TITAN",
@@ -17,6 +18,7 @@ const ElementalColor = {
 };
 
 export default function MatchDetail({ id }: { id: number }) {
+  const { user } = useAuth();
   const { data: match, isLoading } = useGetMatch(id, { query: { queryKey: ["/api/matches", id], enabled: !!id } });
 
   if (isLoading) {
@@ -49,10 +51,10 @@ export default function MatchDetail({ id }: { id: number }) {
             </div>
             {match.status === MatchStatus.COMPLETED && (
               <div className={`text-lg font-bold uppercase tracking-widest px-4 py-1 rounded
-                ${match.winnerId === match.player1Id ? 'bg-primary/20 text-primary' : 
+                ${user && match.winnerId === user.id ? 'bg-primary/20 text-primary' : 
                   match.winnerId === null ? 'bg-muted text-muted-foreground' : 
                   'bg-destructive/20 text-destructive'}`}>
-                {match.winnerId === match.player1Id ? 'Vencedor' : match.winnerId === null ? 'Empate' : 'Derrotado'}
+                {user && match.winnerId === user.id ? 'Vencedor' : match.winnerId === null ? 'Empate' : 'Derrotado'}
               </div>
             )}
           </div>

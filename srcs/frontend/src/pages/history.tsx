@@ -2,10 +2,12 @@ import { useListMatches } from "@workspace/api-client-react";
 import { MatchStatus } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/hooks/use-auth";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export default function History() {
+  const { user } = useAuth();
   const { data: matches, isLoading } = useListMatches();
 
   return (
@@ -51,7 +53,7 @@ export default function History() {
                     </div>
                     <div className="w-32 text-right">
                       {match.status === MatchStatus.COMPLETED ? (
-                        match.winnerId === match.player1Id ? (
+                        user && match.winnerId === user.id ? (
                           <span className="text-primary font-black uppercase tracking-widest text-sm neon-text">Vitória</span>
                         ) : match.winnerId === null ? (
                           <span className="text-muted-foreground font-black uppercase tracking-widest text-sm">Empate</span>
