@@ -1,18 +1,19 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { type IncomingMessage } from "http";
 import { type Server } from "http";
-import { db, matchesTable, roundsTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, matchesTable, roundsTable, usersTable, achievementsTable, userAchievementsTable } from "@workspace/db";
+import { eq, sql, inArray } from "drizzle-orm";
 import { verifyToken } from "./auth.js";
-import { resolveRound, type Elemental } from "./gameEngine.js";
+import { resolveRound, type Elemental, type Outcome } from "./gameEngine.js";
 import { logger } from "./logger.js";
+import { calculateMatchXp, evaluateAchievements, getLevelForXp } from "./progression.js";
 
 type ServerMsg =
   | { type: "QUEUE_JOINED" }
   | { type: "MATCH_FOUND"; matchId: number; opponentUsername: string; yourSide: "player1" | "player2" }
   | { type: "WAITING_FOR_OPPONENT" }
   | { type: "ROUND_RESULT"; roundNumber: number; player1Choice: Elemental; player2Choice: Elemental; yourOutcome: "WIN" | "LOSS" | "DRAW"; player1Score: number; player2Score: number }
-  | { type: "MATCH_OVER"; winnerId: number | null; player1Score: number; player2Score: number }
+  | { type: "MATCH_OVER"; winnerId: number | null; player1Score: number; player2Score: number; rewards?: { xpGained: number; newXp: number; newLevel: number; leveledUp: boolean; newlyUnlockedAchievements: { key: string; name: string; description: string }[] } }
   | { type: "REMATCH_OFFERED" }
   | { type: "REMATCH_WAITING" }
   | { type: "OPPONENT_DISCONNECTED" }
@@ -612,12 +613,44 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
       const p1 = room.player1;
       const p2 = room.player2;
       const finishedMatchId = room.matchId;
-      setTimeout(() => {
-        const userIds = [p1.userId, p2.userId];
-        broadcastToUsers(userIds, { type: "MATCH_OVER", winnerId, player1Score: room.player1Score, player2Score: room.player2Score });
-        // Register rematch slot so both players can offer a rematch
+      const finalP1Score = room.player1Score;
+      const finalP2Score = room.player2Score;
+
+      // Collect rounds played so far (including this one) to evaluate achievements
+      const allRounds = await db
+        .select()
+        .from(roundsTable)
+        .where(eq(roundsTable.matchId, room.matchId))
+        .orderBy(roundsTable.roundNumber);
+
+      setTimeout(async () => {
+        // Compute rewards independently for each player (perspective differs)
+        const p1Outcomes = allRounds.map((r) => r.outcome as Outcome);
+        const p1Choices = allRounds.map((r) => r.player1Choice as Elemental);
+        const p2Outcomes = allRounds.map((r) => (r.outcome === "WIN" ? "LOSS" : r.outcome === "LOSS" ? "WIN" : "DRAW") as Outcome);
+        const p2Choices = allRounds.map((r) => r.player2Choice as Elemental);
+
+        const [p1Rewards, p2Rewards] = await Promise.all([
+          grantPostMatchRewardsWs({ userId: p1.userId, won: winnerId === p1.userId, isDraw: winnerId === null, player1Choices: p1Choices, roundOutcomes: p1Outcomes }),
+          grantPostMatchRewardsWs({ userId: p2.userId, won: winnerId === p2.userId, isDraw: winnerId === null, player1Choices: p2Choices, roundOutcomes: p2Outcomes }),
+        ]);
+
+        sendToUser(p1.userId, {
+          type: "MATCH_OVER",
+          winnerId,
+          player1Score: finalP1Score,
+          player2Score: finalP2Score,
+          ...(p1Rewards ? { rewards: p1Rewards } : {}),
+        });
+        sendToUser(p2.userId, {
+          type: "MATCH_OVER",
+          winnerId,
+          player1Score: finalP1Score,
+          player2Score: finalP2Score,
+          ...(p2Rewards ? { rewards: p2Rewards } : {}),
+        });
+
         rematchOffers.set(finishedMatchId, { player1: p1, player2: p2, offered: new Set() });
-        // Clean up after 3 minutes if no rematch accepted
         setTimeout(() => rematchOffers.delete(finishedMatchId), 3 * 60 * 1000);
       }, 3000);
       rooms.delete(room.matchId);
@@ -689,6 +722,66 @@ async function handleOfferRematch(player: ConnectedPlayer, matchId: number) {
     logger.error({ err }, "Failed to create rematch");
     sendToUser(slot.player1.userId, { type: "ERROR", message: "Falha ao criar revanche." });
     sendToUser(slot.player2.userId, { type: "ERROR", message: "Falha ao criar revanche." });
+  }
+}
+
+async function grantPostMatchRewardsWs(params: {
+  userId: number;
+  won: boolean;
+  isDraw: boolean;
+  player1Choices: Elemental[];
+  roundOutcomes: Outcome[];
+}): Promise<{ xpGained: number; newXp: number; newLevel: number; leveledUp: boolean; newlyUnlockedAchievements: { key: string; name: string; description: string }[] } | null> {
+  try {
+    const { userId, won, isDraw, player1Choices, roundOutcomes } = params;
+    const xpGained = calculateMatchXp({ won, isDraw, mode: "MULTIPLAYER", roundOutcomes });
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!user) return null;
+
+    const newXp = user.xp + xpGained;
+    const newLevel = getLevelForXp(newXp);
+    const leveledUp = newLevel > user.level;
+
+    await db.update(usersTable).set({ xp: newXp, level: newLevel }).where(eq(usersTable.id, userId));
+
+    const completedMatches = await db
+      .select()
+      .from(matchesTable)
+      .where(sql`(${matchesTable.player1Id} = ${userId} OR ${matchesTable.player2Id} = ${userId}) AND ${matchesTable.status} = 'COMPLETED'`);
+
+    const totalMatchesAfterMatch = completedMatches.length;
+    const totalWinsAfterMatch = completedMatches.filter((m) => m.winnerId === userId).length;
+
+    const candidateKeys = evaluateAchievements({
+      userId, won, isDraw, totalWinsAfterMatch, totalMatchesAfterMatch, newLevel, player1Choices, roundOutcomes,
+    });
+
+    let newlyUnlockedAchievements: { key: string; name: string; description: string }[] = [];
+
+    if (candidateKeys.length > 0) {
+      const alreadyUnlocked = await db
+        .select({ key: achievementsTable.key })
+        .from(userAchievementsTable)
+        .innerJoin(achievementsTable, eq(userAchievementsTable.achievementId, achievementsTable.id))
+        .where(eq(userAchievementsTable.userId, userId));
+
+      const alreadyUnlockedKeys = new Set(alreadyUnlocked.map((a) => a.key));
+      const trulyNewKeys = candidateKeys.filter((key) => !alreadyUnlockedKeys.has(key));
+
+      if (trulyNewKeys.length > 0) {
+        const achievementRows = await db.select().from(achievementsTable).where(inArray(achievementsTable.key, trulyNewKeys));
+        if (achievementRows.length > 0) {
+          await db.insert(userAchievementsTable).values(achievementRows.map((a) => ({ userId, achievementId: a.id }))).onConflictDoNothing();
+          newlyUnlockedAchievements = achievementRows.map((a) => ({ key: a.key, name: a.name, description: a.description }));
+        }
+      }
+    }
+
+    return { xpGained, newXp, newLevel, leveledUp, newlyUnlockedAchievements };
+  } catch (err) {
+    logger.error({ err }, "Failed to grant post-match rewards in WS");
+    return null;
   }
 }
 

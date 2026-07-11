@@ -26,7 +26,7 @@ services:
       - back-end
 
   data-base:
-    build: ./data-base
+    build: ./database
     image: database
     container_name: database
     restart: unless-stopped

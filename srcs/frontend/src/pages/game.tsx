@@ -8,7 +8,7 @@ import { PauseMenu } from "@/components/pause-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { CombatScene } from "@/components/arena/CombatScene";
-import { Pause } from "lucide-react";
+import { Pause, Zap, Trophy } from "lucide-react";
 
 type GameState = "SELECTING" | "COUNTDOWN" | "CLASH" | "ROUND_RESULT" | "MATCH_OVER";
 
@@ -127,6 +127,23 @@ export default function Game() {
         outcome: result.outcome as RoundOutcome,
       });
       await refetchMatch();
+
+      // Mostrar recompensas se a partida acabou (rewards só vem no último round)
+      if (result.rewards) {
+        const { xpGained, leveledUp, newLevel, newlyUnlockedAchievements } = result.rewards;
+        toast({
+          title: leveledUp ? `⬆️ Nível ${newLevel}!` : `+${xpGained} XP`,
+          description: leveledUp
+            ? `Parabéns! Você subiu para o nível ${newLevel}.`
+            : `Você ganhou ${xpGained} XP nesta partida.`,
+        });
+        for (const achievement of newlyUnlockedAchievements) {
+          toast({
+            title: `🏆 Conquista: ${achievement.name}`,
+            description: achievement.description,
+          });
+        }
+      }
 
       if (result.outcome === "WIN") {
         const winMsgs = [

@@ -2,6 +2,8 @@ import { useAuth } from "@/hooks/use-auth"; //acabei de adicionar issso
 import { 
   useGetUser, 
   useGetUserStats, 
+  useGetUserProgression,
+  useGetUserAchievements,
   useListMatches, 
   useListFriends, 
   useAddFriend, 
@@ -12,7 +14,7 @@ import { Elemental } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { User as UserIcon, Activity, Crosshair, Target, UserPlus, UserMinus, Swords } from "lucide-react";
+import { User as UserIcon, Activity, Crosshair, Target, UserPlus, UserMinus, Swords, Lock, Trophy } from "lucide-react";
 import { useWs } from "@/hooks/use-ws";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -43,6 +45,8 @@ export default function Profile({ id }: { id: number }) {
   const [, setLocation] = useLocation();
   const { data: user, isLoading: loadingUser } = useGetUser(id, { query: { queryKey: ["/api/users", id], enabled: !!id } });
   const { data: stats, isLoading: loadingStats } = useGetUserStats(id, { query: { queryKey: ["/api/users", id, "stats"], enabled: !!id } });
+  const { data: progression, isLoading: loadingProgression } = useGetUserProgression(id, { query: { queryKey: ["/api/users", id, "progression"], enabled: !!id } });
+  const { data: achievements, isLoading: loadingAchievements } = useGetUserAchievements(id, { query: { queryKey: ["/api/users", id, "achievements"], enabled: !!id } });
   const isOwnProfile = authUser?.id === user?.id;
 
   const { data: friendships } = useListFriends({ query: { queryKey: ["/api/friends"], enabled: !isOwnProfile && !!authUser } });
@@ -186,7 +190,7 @@ export default function Profile({ id }: { id: number }) {
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row items-center gap-8 bg-card/50 border border-primary/20 p-8 rounded-xl backdrop-blur relative overflow-hidden">
 
-        <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box">
+        <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box relative">
           {user.avatarUrl ? (
             <img
               src={user.avatarUrl}
@@ -195,9 +199,14 @@ export default function Profile({ id }: { id: number }) {
           ) : (
             user.username.charAt(0)
           )}
+          {progression && (
+            <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-background border-2 border-primary flex items-center justify-center text-sm font-black text-primary">
+              {progression.level}
+            </div>
+          )}
         </div>
         
-        <div className="text-center md:text-left z-10">
+        <div className="text-center md:text-left z-10 flex-1">
           <h1 className="text-4xl font-black uppercase tracking-widest neon-text text-white">
             {user.username}
             {isOwnProfile && (
@@ -212,6 +221,25 @@ export default function Profile({ id }: { id: number }) {
           <p className="text-muted-foreground font-mono mt-2 uppercase text-sm">
             Recrutado em: {format(new Date(user.createdAt), "dd 'de' MMMM, yyyy", { locale: ptBR })}
           </p>
+
+          {progression && (
+            <div className="mt-4 max-w-sm mx-auto md:mx-0">
+              <div className="flex items-center justify-between text-xs font-mono uppercase mb-1">
+                <span className="text-primary font-bold">Nível {progression.level}</span>
+                <span className="text-muted-foreground">
+                  {progression.percentToNextLevel === null
+                    ? "Nível máximo"
+                    : `${progression.xpIntoLevel} / ${progression.xpForNextLevel} XP`}
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-background border border-border overflow-hidden">
+                <div
+                  className="h-full bg-primary neon-box transition-all"
+                  style={{ width: `${progression.percentToNextLevel ?? 100}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {!isOwnProfile && authUser && (
             <div className="mt-4 flex gap-2 justify-center md:justify-start">
@@ -301,6 +329,55 @@ export default function Profile({ id }: { id: number }) {
           </CardContent>
         </Card>
       </div>
+
+      <div className="flex items-center justify-center w-full">
+        <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border pb-2 mt-12">Conquistas</h2>
+      </div>
+
+      {loadingAchievements ? (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : !achievements || achievements.length === 0 ? (
+        <Card className="bg-card/50 border-border border-dashed">
+          <CardContent className="p-8 text-center">
+            <p className="text-muted-foreground font-mono uppercase text-sm">Nenhuma conquista disponível ainda.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {achievements.map((a) => (
+            <Card
+              key={a.key}
+              className={`text-center py-6 transition-colors ${
+                a.unlocked
+                  ? "bg-card/50 border-primary/40"
+                  : "bg-card/20 border-border opacity-50"
+              }`}
+              title={a.description}
+            >
+              <CardContent className="flex flex-col items-center gap-2 p-2">
+                {a.unlocked ? (
+                  <Trophy className="w-8 h-8 text-primary" />
+                ) : (
+                  <Lock className="w-8 h-8 text-muted-foreground" />
+                )}
+                <p className={`text-sm font-bold uppercase tracking-wide ${a.unlocked ? "text-white" : "text-muted-foreground"}`}>
+                  {a.name}
+                </p>
+                <p className="text-[11px] font-mono text-muted-foreground px-2">
+                  {a.description}
+                </p>
+                {a.unlocked && a.unlockedAt && (
+                  <p className="text-[10px] font-mono text-primary uppercase">
+                    {format(new Date(a.unlockedAt), "dd/MM/yyyy", { locale: ptBR })}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {isEditOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center">

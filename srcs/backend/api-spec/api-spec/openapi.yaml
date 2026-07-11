@@ -20,6 +20,8 @@ tags:
     description: Leaderboard and stats
   - name: organizations
     description: Organization management
+  - name: progression
+    description: Player progression (XP, level) and achievements
 paths:
   /healthz:
     get:
@@ -198,6 +200,67 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserStats"
 
+  /users/{id}/progression:
+    get:
+      operationId: getUserProgression
+      tags: [progression]
+      summary: Get XP and level progress for a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User progression
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProgression"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}/achievements:
+    get:
+      operationId: getUserAchievements
+      tags: [progression]
+      summary: Get achievement progress for a user (full catalog with unlocked status)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User achievement progress
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserAchievement"
+
+  /achievements:
+    get:
+      operationId: listAchievements
+      tags: [progression]
+      summary: Get the full achievement catalog
+      responses:
+        "200":
+          description: Achievement catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Achievement"
+
   /matches:
     get:
       operationId: listMatches
@@ -289,7 +352,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Round"
+                $ref: "#/components/schemas/RoundResult"
         "400":
           description: Invalid move or match not active
           content:
@@ -670,6 +733,89 @@ components:
           type: number
         favoriteElemental:
           type: ["string", "null"]
+
+    UserProgression:
+      type: object
+      required: [userId, xp, level, xpIntoLevel, xpForNextLevel, percentToNextLevel]
+      properties:
+        userId:
+          type: integer
+        xp:
+          type: integer
+        level:
+          type: integer
+        xpIntoLevel:
+          type: integer
+        xpForNextLevel:
+          type: ["integer", "null"]
+        percentToNextLevel:
+          type: ["integer", "null"]
+
+    AchievementCategory:
+      type: string
+      enum: [GENERAL, COMBAT, PROGRESSION]
+
+    Achievement:
+      type: object
+      required: [id, key, name, description, category]
+      properties:
+        id:
+          type: integer
+        key:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        icon:
+          type: ["string", "null"]
+        category:
+          $ref: "#/components/schemas/AchievementCategory"
+
+    UserAchievement:
+      allOf:
+        - $ref: "#/components/schemas/Achievement"
+        - type: object
+          required: [unlocked, unlockedAt]
+          properties:
+            unlocked:
+              type: boolean
+            unlockedAt:
+              type: ["string", "null"]
+              format: date-time
+
+    MatchRewards:
+      type: object
+      required: [xpGained, newXp, newLevel, leveledUp, newlyUnlockedAchievements]
+      properties:
+        xpGained:
+          type: integer
+        newXp:
+          type: integer
+        newLevel:
+          type: integer
+        leveledUp:
+          type: boolean
+        newlyUnlockedAchievements:
+          type: array
+          items:
+            type: object
+            required: [key, name, description]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+
+    RoundResult:
+      allOf:
+        - $ref: "#/components/schemas/Round"
+        - type: object
+          properties:
+            rewards:
+              $ref: "#/components/schemas/MatchRewards"
 
     Elemental:
       type: string
