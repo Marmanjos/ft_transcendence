@@ -8,12 +8,7 @@ all: setup
 	$(COMPOSE) build --no-cache --pull
 	$(COMPOSE) up -d --force-recreate
 
-create:
-	@mkdir -p $(CERTS_DIR)
-	@if [ ! -f $(CERTS_DIR)/localhost.key ] || [ ! -f $(CERTS_DIR)/localhost.crt ]; then \
-		openssl req -x509 -newkey rsa:2048 -nodes -out $(CERTS_DIR)/localhost.crt -keyout $(CERTS_DIR)/localhost.key -days 365 -subj "/CN=localhost"; \
-		echo "SSL certificates generated in $(CERTS_DIR)/"; \
-	fi
+create: setup
 	@printf '%s\n' \
 		'PORT=3001' \
 		'DATABASE_URL=postgresql://postgres:your-password@db.your-project-ref.supabase.co:5432/postgres?sslmode=require' \
@@ -21,9 +16,16 @@ create:
 
 	@printf '%s\n' \
 		'VITE_API_BASE_URL=https://localhost:3001' > srcs/frontend/.env
+	@echo "✓ Environment files created"
 
 setup:
 	@mkdir -p $(DATA_DIRS)
+	@mkdir -p $(CERTS_DIR)
+	@if [ ! -f $(CERTS_DIR)/localhost.key ] || [ ! -f $(CERTS_DIR)/localhost.crt ]; then \
+		openssl req -x509 -newkey rsa:2048 -nodes -out $(CERTS_DIR)/localhost.crt -keyout $(CERTS_DIR)/localhost.key -days 365 -subj "/CN=localhost"; \
+		chmod 644 $(CERTS_DIR)/localhost.crt $(CERTS_DIR)/localhost.key; \
+		echo "✓ SSL certificates generated"; \
+	fi
 
 status:
 	@echo '\nIMAGES:'

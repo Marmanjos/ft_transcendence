@@ -5,3 +5,4 @@ srcs/frontend/.env
 srcs/backend/.env
 
 current_context.md
+secrets/
