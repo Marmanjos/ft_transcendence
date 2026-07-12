@@ -399,6 +399,7 @@ function resolveRound3v3(p1: string, p2: string, p3: string): {
 function sendSyncMatchState(userId: number, matchId: number) {
   const room1v1 = rooms.get(matchId);
   if (room1v1) {
+    logger.info({ userId, matchId, type: "1v1" }, "Found 1v1 match for sync");
     const side = room1v1.player1.userId === userId ? "player1" : "player2";
     const opponent = side === "player1" ? room1v1.player2 : room1v1.player1;
     sendToUser(userId, {
@@ -415,6 +416,7 @@ function sendSyncMatchState(userId: number, matchId: number) {
 
   const matchRoom = rooms3v3.get(matchId);
   if (matchRoom) {
+    logger.info({ userId, matchId, type: "3v3", players: matchRoom.players.length }, "Found 3v3 match for sync - sending MATCH_3V3_UPDATE");
     const playersPayload = matchRoom.players.map((p) => ({
       username: p.username,
       choice: p.userId === userId ? matchRoom.choices[p.userId] : (matchRoom.choices[p.userId] ? "chosen" : null),
@@ -425,7 +427,10 @@ function sendSyncMatchState(userId: number, matchId: number) {
       roundNumber: matchRoom.roundNumber,
       players: playersPayload,
     });
+    return;
   }
+
+  logger.info({ userId, matchId, rooms3v3Size: rooms3v3.size }, "No match found for sync");
 }
 
 async function createMultiPlayerMatch(player1: ConnectedPlayer, player2: ConnectedPlayer) {
@@ -602,21 +607,26 @@ async function handleJoinRoom(player: ConnectedPlayer, codeRaw: string) {
 }
 
 async function handlePlayerReady(player: ConnectedPlayer) {
+  logger.info({ userId: player.userId }, "handlePlayerReady called");
   const room = getPartyRoomByUserId(player.userId);
   if (!room) {
+    logger.info({ userId: player.userId }, "Player not in any room");
     sendToUser(player.userId, { type: "ERROR", message: "Você não está em uma sala." });
     return;
   }
   if (room.mode !== "3v3") {
+    logger.info({ userId: player.userId, mode: room.mode }, "Room is not 3v3");
     sendToUser(player.userId, { type: "ERROR", message: "Apenas salas 3v3 utilizam o sistema de pronto." });
     return;
   }
   const maxGuests = 2;
   if (room.guests.length < maxGuests) {
+    logger.info({ userId: player.userId, guestCount: room.guests.length }, "Not all guests joined yet");
     sendToUser(player.userId, { type: "ERROR", message: "Aguarda todos os jogadores entrarem antes de ficar pronto." });
     return;
   }
 
+  logger.info({ userId: player.userId, roomCode: room.code }, "Player ready - adding to readyPlayers");
   room.readyPlayers.add(player.userId);
 
   const allPlayers = [room.host, ...room.guests];
@@ -631,7 +641,11 @@ async function handlePlayerReady(player: ConnectedPlayer) {
   });
 
   const allReady = allPlayers.every((p) => room.readyPlayers.has(p.userId));
-  if (!allReady || room.matchId !== null) return;
+  logger.info({ roomCode: room.code, allReady, matchIdAlreadyExists: room.matchId !== null, readyCount: room.readyPlayers.size, totalPlayers: allPlayers.length }, "Checking if all ready");
+  if (!allReady || room.matchId !== null) {
+    logger.info({ roomCode: room.code, allReady, matchIdAlreadyExists: room.matchId !== null }, "Not all ready or match already exists, returning");
+    return;
+  }
 
   // All ready — start the 3v3 match
   const matchId = Math.floor(Math.random() * 100000000) + 1;
@@ -651,7 +665,7 @@ async function handlePlayerReady(player: ConnectedPlayer) {
     match3v3.scores[p.userId] = 0;
   }
   rooms3v3.set(matchId, match3v3);
-  logger.info({ matchId, code: room.code, playerIds: allPlayers.map(p => p.userId) }, "3v3 Match started after all players ready");
+  logger.info({ matchId, code: room.code, playerIds: allPlayers.map(p => p.userId), rooms3v3Size: rooms3v3.size }, "3v3 Match started after all players ready - added to rooms3v3");
 
   const state = serializePartyRoom(room);
   for (const p of allPlayers) {
