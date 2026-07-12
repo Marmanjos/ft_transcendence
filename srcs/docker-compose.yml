@@ -10,7 +10,6 @@ services:
       - "3001:3001"
     volumes:
       - backend_data:/app/uploads
-      - ../secrets:/app/secrets:ro
     networks:
       - ft_transcendence
 

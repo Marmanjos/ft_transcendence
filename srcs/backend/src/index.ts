@@ -1,5 +1,4 @@
-import { createSecureServer } from "http2";
-import { readFileSync } from "fs";
+import { createServer } from "http";
 import app from "./app.js";
 import { attachWsServer } from "./lib/wsServer.js";
 import { logger } from "./lib/logger.js";
@@ -18,12 +17,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const options = {
-  key: readFileSync("/app/secrets/localhost.key"),
-  cert: readFileSync("/app/secrets/localhost.crt"),
-};
-
-const server = createSecureServer(options, app);
+const server = createServer(app);
 attachWsServer(server);
 
 server.listen(port, (err?: Error) => {
@@ -31,5 +25,5 @@ server.listen(port, (err?: Error) => {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
-  logger.info({ port }, "Server listening on HTTPS");
+  logger.info({ port }, "Server listening");
 });
