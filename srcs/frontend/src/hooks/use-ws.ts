@@ -26,7 +26,10 @@ export type ServerMsg =
   | { type: "ORG_INVITE_RECEIVED"; organizationId: number }
   | { type: "ERROR"; message: string }
   | { type: "PONG" }
-  | { type: "NOTIFICATION"; id: number; notifType: string; payload: unknown; createdAt: string };
+  | { type: "NOTIFICATION"; id: number; notifType: string; payload: unknown; createdAt: string }
+  | { type: "MATCH_3V3_UPDATE"; roundNumber: number; players: Array<{ username: string; choice: string | "chosen" | null; score: number }> }
+  | { type: "MATCH_3V3_ROUND_RESULT"; roundNumber: number; choices: Record<string, string>; outcomes: Record<string, "WIN" | "LOSS" | "DRAW">; scores: Record<string, number> }
+  | { type: "MATCH_3V3_OVER"; scores: Record<string, number> };
 
 export type ClientMsg =
   | { type: "JOIN_QUEUE" }

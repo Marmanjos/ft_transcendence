@@ -651,10 +651,11 @@ async function handlePlayerReady(player: ConnectedPlayer) {
     match3v3.scores[p.userId] = 0;
   }
   rooms3v3.set(matchId, match3v3);
-  logger.info({ matchId, code: room.code }, "3v3 Match started after all players ready");
+  logger.info({ matchId, code: room.code, playerIds: allPlayers.map(p => p.userId) }, "3v3 Match started after all players ready");
 
   const state = serializePartyRoom(room);
   for (const p of allPlayers) {
+    logger.info({ userId: p.userId, matchId, code: room.code }, "Sending ROOM_UPDATED with matchId for 3v3");
     sendToUser(p.userId, { type: "ROOM_UPDATED", ...state });
   }
 }
@@ -1224,6 +1225,7 @@ export function attachWsServer(server: Server) {
           sendToUser(player.userId, { type: "PONG" });
           break;
         case "SYNC_MATCH":
+          logger.info({ userId: player.userId, matchId: msg.matchId, has3v3: rooms3v3.has(msg.matchId) }, "SYNC_MATCH requested");
           sendSyncMatchState(player.userId, msg.matchId);
           break;
         case "ABANDON_MATCH":
