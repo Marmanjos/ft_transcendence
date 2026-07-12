@@ -648,7 +648,10 @@ async function handlePlayerReady(player: ConnectedPlayer) {
   }
 
   // All ready — start the 3v3 match
-  const matchId = Math.floor(Math.random() * 100000000) + 1;
+  let matchId = Math.floor(Math.random() * 100000000) + 1;
+  while (rooms3v3.has(matchId) || rooms.has(matchId)) {
+    matchId = Math.floor(Math.random() * 100000000) + 1;
+  }
   room.matchId = matchId;
   room.readyPlayers.clear();
 
