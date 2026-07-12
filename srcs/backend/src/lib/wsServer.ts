@@ -481,6 +481,7 @@ function detachPlayerFromPartyRoom(userId: number, reason: "host_left" | "closed
 
   room.guests = room.guests.filter((guest) => guest.userId !== userId);
   playerPartyRoom.delete(userId);
+  room.readyPlayers.clear();
   sendToUser(room.host.userId, { type: "ROOM_PLAYER_LEFT", code: room.code, username: departingUsername });
   broadcastPartyRoomState(room);
 }
@@ -1119,6 +1120,7 @@ function handleDisconnect(userId: number) {
       const partyRoom = Array.from(partyRooms.values()).find((r) => r.matchId === match.matchId);
       if (partyRoom) {
         partyRoom.matchId = null;
+        partyRoom.readyPlayers.clear();
         broadcastPartyRoomState(partyRoom);
       }
       logger.info({ matchId: match.matchId, userId }, "Player disconnected from 3v3 match");
