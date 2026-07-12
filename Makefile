@@ -1,20 +1,26 @@
 DOCKER = docker
 COMPOSE = $(DOCKER) compose -f srcs/docker-compose.yml
-PROJECT_URL = http://localhost
+PROJECT_URL = https://localhost
 DATA_DIRS = /home/atambo/data/backend /home/atambo/data/database
+CERTS_DIR = secrets
 
 all: setup
 	$(COMPOSE) build --no-cache --pull
 	$(COMPOSE) up -d --force-recreate
 
 create:
+	@mkdir -p $(CERTS_DIR)
+	@if [ ! -f $(CERTS_DIR)/localhost.key ] || [ ! -f $(CERTS_DIR)/localhost.crt ]; then \
+		openssl req -x509 -newkey rsa:2048 -nodes -out $(CERTS_DIR)/localhost.crt -keyout $(CERTS_DIR)/localhost.key -days 365 -subj "/CN=localhost"; \
+		echo "SSL certificates generated in $(CERTS_DIR)/"; \
+	fi
 	@printf '%s\n' \
 		'PORT=3001' \
 		'DATABASE_URL=postgresql://postgres:your-password@db.your-project-ref.supabase.co:5432/postgres?sslmode=require' \
 		'SESSION_SECRET=change-me-in-production' > srcs/backend/.env
 
 	@printf '%s\n' \
-		'VITE_API_BASE_URL=http://localhost:3001' > srcs/frontend/.env
+		'VITE_API_BASE_URL=https://localhost:3001' > srcs/frontend/.env
 
 setup:
 	@mkdir -p $(DATA_DIRS)
@@ -36,7 +42,7 @@ clean:
 	$(DOCKER) system prune -f
 
 fclean: clean
-	@rm -rf srcs/.env secrets/
+	@rm -rf srcs/.env $(CERTS_DIR)/
 
 re: fclean all
 

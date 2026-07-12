@@ -10,6 +10,7 @@ services:
       - "3001:3001"
     volumes:
       - backend_data:/app/uploads
+      - ../secrets:/app/secrets:ro
     networks:
       - ft_transcendence
 
@@ -20,6 +21,9 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ../secrets:/etc/nginx/certs:ro
     networks:
       - ft_transcendence
     depends_on:
