@@ -41,16 +41,10 @@ fclean: clean
 re: fclean all
 
 open:
-	@if command -v firefox >/dev/null 2>&1; then \
-		firefox --private-window "$(PROJECT_URL)" >/dev/null 2>&1 & \
-	elif command -v google-chrome >/dev/null 2>&1; then \
+	@if command -v google-chrome >/dev/null 2>&1; then \
 		google-chrome --incognito "$(PROJECT_URL)" >/dev/null 2>&1 & \
-	elif command -v chromium >/dev/null 2>&1; then \
-		chromium --incognito "$(PROJECT_URL)" >/dev/null 2>&1 & \
-	elif command -v chromium-browser >/dev/null 2>&1; then \
-		chromium-browser --incognito "$(PROJECT_URL)" >/dev/null 2>&1 & \
 	else \
-		echo "No supported browser found. Open $(PROJECT_URL) manually."; \
+		echo "Error: Google Chrome not found. Please install Chrome to open the project."; \
 		exit 1; \
 	fi
 

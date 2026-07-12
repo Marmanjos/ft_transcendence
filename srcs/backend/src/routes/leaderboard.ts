@@ -29,8 +29,13 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
 
       let wins = 0, losses = 0;
       for (const match of completedMatches) {
-        if (match.winnerId === user.id) wins++;
-        else if (match.winnerId !== null) losses++;
+        if (match.winnerId === user.id) {
+          wins++;
+        } else if (match.winnerId !== null) {
+          losses++;
+        } else if (match.mode === "SINGLE_PLAYER" && match.player2Score > match.player1Score) {
+          losses++;
+        }
       }
 
       const totalMatches = completedMatches.length;

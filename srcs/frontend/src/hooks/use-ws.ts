@@ -17,6 +17,7 @@ export type ServerMsg =
   | { type: "ROOM_CLOSED"; code: string; reason: "host_left" | "closed" }
   | { type: "ROOM_FULL"; code: string }
   | { type: "ROOM_NOT_FOUND"; code: string }
+  | { type: "ROOM_PLAYER_READY"; code: string; readyUsernames: string[] }
   | { type: "GAME_INVITE_RECEIVED"; fromUsername: string; roomCode: string }
   | { type: "FRIEND_UPDATE"; reason: "REQUEST_RECEIVED" | "REQUEST_ACCEPTED" | "REMOVED"; fromUsername?: string }
   | { type: "OPPONENT_TEMPORARILY_DISCONNECTED" }
@@ -38,7 +39,9 @@ export type ClientMsg =
   | { type: "SEND_ROOM_CHAT"; text: string }
   | { type: "INVITE_TO_PLAY"; targetUserId: number }
   | { type: "PING" }
-  | { type: "SYNC_MATCH"; matchId: number };
+  | { type: "SYNC_MATCH"; matchId: number }
+  | { type: "ABANDON_MATCH"; matchId: number }
+  | { type: "PLAYER_READY" };
 
 type MsgHandler = (msg: ServerMsg) => void;
 

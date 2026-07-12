@@ -51,10 +51,10 @@ export default function MatchDetail({ id }: { id: number }) {
             </div>
             {match.status === MatchStatus.COMPLETED && (
               <div className={`text-lg font-bold uppercase tracking-widest px-4 py-1 rounded
-                ${user && match.winnerId === user.id ? 'bg-primary/20 text-primary' : 
-                  match.winnerId === null ? 'bg-muted text-muted-foreground' : 
+                ${match.winnerId === match.player1Id ? 'bg-primary/20 text-primary' : 
+                  match.player1Score === match.player2Score ? 'bg-muted text-muted-foreground' : 
                   'bg-destructive/20 text-destructive'}`}>
-                {user && match.winnerId === user.id ? 'Vencedor' : match.winnerId === null ? 'Empate' : 'Derrotado'}
+                {match.winnerId === match.player1Id ? 'Vencedor' : match.player1Score === match.player2Score ? 'Empate' : 'Derrotado'}
               </div>
             )}
           </div>

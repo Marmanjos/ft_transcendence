@@ -129,12 +129,16 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
 
   let wins = 0, losses = 0, draws = 0;
   for (const match of completedMatches) {
-    if (match.winnerId === null) {
-      draws++;
-    } else if (match.winnerId === userId) {
+    if (match.winnerId === userId) {
       wins++;
-    } else {
+    } else if (match.winnerId !== null) {
       losses++;
+    } else {
+      if (match.mode === "SINGLE_PLAYER" && match.player2Score > match.player1Score) {
+        losses++;
+      } else {
+        draws++;
+      }
     }
   }
 

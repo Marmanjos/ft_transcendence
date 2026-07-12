@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Copy, LogIn, Plus, Users } from "lucide-react";
+import { Copy, LogIn, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,7 +21,7 @@ const ROOM_PATH = "/room/3v3" as const;
 
 export default function Room3v3Page() {
   const [, setLocation] = useLocation();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { toast } = useToast();
   const { send, onMessage, connected } = useWs(token);
 
@@ -37,6 +37,7 @@ export default function Room3v3Page() {
   const [activeRoomCode, setActiveRoomCode] = useState(initialRoomCode);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<"idle" | "creating" | "joining">("idle");
+  const [readyUsernames, setReadyUsernames] = useState<string[]>([]);
 
   useEffect(() => {
     if (persistedRoom && persistedRoom.path !== ROOM_PATH) {
@@ -64,6 +65,7 @@ export default function Room3v3Page() {
           });
           setActiveRoomCode(msg.code);
           setRoomCode(msg.code);
+          setReadyUsernames([]);
           saveRoomSession({ code: msg.code, path: ROOM_PATH });
           if (window.location.pathname !== ROOM_PATH || window.location.search !== `?code=${encodeURIComponent(msg.code)}`) {
             setLocation(`${ROOM_PATH}?code=${encodeURIComponent(msg.code)}`);
@@ -73,6 +75,9 @@ export default function Room3v3Page() {
           }
           setBusy(false);
           setStatus("idle");
+          break;
+        case "ROOM_PLAYER_READY":
+          setReadyUsernames(msg.readyUsernames);
           break;
         case "ROOM_CLOSED":
           setRoomState(null);
@@ -162,8 +167,20 @@ export default function Room3v3Page() {
     setBusy(false);
     setStatus("idle");
     setRoomCode("");
+    setReadyUsernames([]);
     setLocation(ROOM_PATH);
   };
+
+  const handleReady = () => {
+    send({ type: "PLAYER_READY" });
+  };
+
+  const allPlayers = roomState
+    ? [roomState.hostUsername, ...roomState.guestUsernames]
+    : [];
+  const isFull = allPlayers.length === 3;
+  const myUsername = user?.username ?? "";
+  const iAmReady = readyUsernames.includes(myUsername);
 
   return (
     <div className="min-h-[100dvh] w-full bg-black text-white px-6 py-10">
@@ -176,11 +193,7 @@ export default function Room3v3Page() {
               Cria uma sala, entra com um código e depois ficas apenas na sala ativa até saires ou a apagares.
             </p>
           </div>
-          {!roomViewActive && (
-            <Button variant="outline" onClick={() => setLocation("/game/3v3")} className="uppercase tracking-widest font-bold">
-              <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
-            </Button>
-          )}
+          
         </div>
 
         {!roomViewActive ? (
@@ -269,6 +282,46 @@ export default function Room3v3Page() {
                     <span className={`inline-block h-2.5 w-2.5 rounded-full ${roomState?.guestUsernames.length ? "bg-red-500 animate-pulse" : "bg-muted-foreground"}`} />
                     {roomState?.guestUsernames.length ? `${roomState.guestUsernames.length}/2 jogadores` : "Aguardando segundo jogador"}
                   </div>
+
+                  {isFull && (
+                    <div className="rounded-xl border border-border p-4 space-y-3">
+                      <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Estado dos jogadores</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {allPlayers.map((name) => (
+                          <div
+                            key={name}
+                            className={`rounded-lg border p-2 text-center text-xs font-bold uppercase tracking-wider transition-colors ${
+                              readyUsernames.includes(name)
+                                ? "border-green-500/50 bg-green-950/40 text-green-400"
+                                : "border-border bg-black/30 text-muted-foreground"
+                            }`}
+                          >
+                            <span className={`mr-1 ${readyUsernames.includes(name) ? "text-green-400" : "text-muted-foreground"}`}>
+                              {readyUsernames.includes(name) ? "✓" : "○"}
+                            </span>
+                            {name}
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        onClick={handleReady}
+                        disabled={iAmReady}
+                        className={`w-full h-12 font-bold uppercase tracking-widest transition-all ${
+                          iAmReady
+                            ? "bg-green-700 hover:bg-green-700 cursor-not-allowed opacity-80"
+                            : "neon-box bg-red-600 hover:bg-red-700"
+                        }`}
+                      >
+                        {iAmReady ? "✓ Pronto!" : "Pronto"}
+                      </Button>
+                      {readyUsernames.length > 0 && readyUsernames.length < 3 && (
+                        <p className="text-xs text-center font-mono text-muted-foreground animate-pulse">
+                          A aguardar {3 - readyUsernames.length} jogador{3 - readyUsernames.length !== 1 ? "es" : ""}...
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <Button
                     onClick={handleLeaveRoom}
                     variant="outline"

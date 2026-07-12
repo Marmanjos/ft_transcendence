@@ -280,7 +280,7 @@ export default function Game() {
   const isPlayerWinner =
     match.winnerId !== null && match.winnerId === match.player1Id;
   const isDraw =
-    match.winnerId === null && match.status === MatchStatus.COMPLETED;
+    match.status === MatchStatus.COMPLETED && match.player1Score === match.player2Score;
 
   return (
     <div className="min-h-[100dvh] w-full relative overflow-hidden bg-black text-white font-sans select-none">
