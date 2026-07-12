@@ -12,7 +12,7 @@ import { MatchManager, type Match, type RoundResult } from "@/lib/match-manager"
 import { useWsContext } from "@/contexts/ws-context";
 import { useToast } from "@/hooks/use-toast";
 import { PauseMenu } from "@/components/pause-menu";
-import { Users } from "lucide-react";
+import { Users, Pause } from "lucide-react";
 import { clearRoomSession } from "@/lib/room-session";
 
 declare global {
@@ -312,25 +312,47 @@ export default function Game3v3Arena() {
       {arenaState !== "MATCH_OVER" && (
         <div
           className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6 py-4"
-          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, transparent 100%)" }}
+          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 100%)" }}
         >
+          {/* Left */}
           <div className="flex flex-col gap-1 min-w-[140px]">
-            <p className="font-mono text-red-300 uppercase tracking-widest text-xs truncate">{leftPlayer?.username}</p>
-            <p className="text-xs font-mono text-white/50">Score: {leftScore}</p>
-          </div>
-
-          <div className="flex flex-col items-center gap-1">
-            <p className="font-mono text-white/40 uppercase tracking-[0.3em] text-xs">3v3 Round</p>
-            <p className="font-black text-3xl text-white/80">{match.round}</p>
-            <div className="flex flex-col items-center mt-1">
-              <p className="font-mono text-cyan-400 uppercase tracking-widest text-[10px] font-bold">{centerPlayer?.username} (Tu)</p>
-              <p className="text-xs font-mono text-cyan-400 font-bold">Score: {centerScore}</p>
+            <p className="font-mono text-primary uppercase tracking-widest text-xs truncate">{leftPlayer?.username}</p>
+            <div className="flex gap-2">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  animate={{
+                    boxShadow: i < leftScore ? "0 0 8px #00ffff" : "none",
+                  }}
+                  className={`h-2 w-8 rounded-sm ${i < leftScore ? "bg-primary" : "bg-white/20"}`}
+                />
+              ))}
             </div>
           </div>
 
+          {/* Center */}
+          <div className="flex flex-col items-center gap-1">
+            <p className="font-mono text-white/40 uppercase tracking-[0.3em] text-xs">Round</p>
+            <p className="font-black text-3xl text-white/80">{match.round}</p>
+            <button
+              onClick={() => setPaused(true)}
+              className="mt-1 p-1.5 rounded border border-white/20 hover:border-primary/60 text-white/40 hover:text-primary transition-colors"
+            >
+              <Pause className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Right */}
           <div className="flex flex-col items-end gap-1 min-w-[140px]">
-            <p className="font-mono text-red-300 uppercase tracking-widest text-xs truncate text-right">{rightPlayer?.username}</p>
-            <p className="text-xs font-mono text-white/50 text-right">Score: {rightScore}</p>
+            <p className="font-mono text-destructive uppercase tracking-widest text-xs truncate">{rightPlayer?.username}</p>
+            <div className="flex gap-2 justify-end">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className={`h-2 w-8 rounded-sm ${i < rightScore ? "bg-destructive" : "bg-white/20"}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
