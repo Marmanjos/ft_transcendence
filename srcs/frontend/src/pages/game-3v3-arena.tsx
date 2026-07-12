@@ -9,7 +9,7 @@ import { ArenaBackground } from "@/components/arena-background";
 import { Pause } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { MatchManager, type Match, type RoundResult } from "@/lib/match-manager";
-import { useWs } from "@/hooks/use-ws";
+import { useWsContext } from "@/contexts/ws-context";
 import { useToast } from "@/hooks/use-toast";
 import { PauseMenu } from "@/components/pause-menu";
 import { Users } from "lucide-react";
@@ -30,11 +30,11 @@ export default function Game3v3Arena() {
   const searchParams = new URLSearchParams(window.location.search);
   const matchId = searchParams.get("matchId");
 
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const username = user?.username ?? `guest_${Math.random().toString(36).slice(2,6)}`;
 
   const { toast } = useToast();
-  const { send, onMessage, connected } = useWs(token);
+  const { send, onMessage, connected } = useWsContext();
 
   const [arenaState, setArenaState] = useState<ArenaState>("SELECTING");
   const [match, setMatch] = useState<Match | null>(null);

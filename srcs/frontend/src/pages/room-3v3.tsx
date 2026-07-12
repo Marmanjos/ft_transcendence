@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { useWs, type ServerMsg } from "@/hooks/use-ws";
+import { type ServerMsg } from "@/hooks/use-ws";
+import { useWsContext } from "@/contexts/ws-context";
 import { clearRoomSession, loadRoomSession, saveRoomSession } from "@/lib/room-session";
 
 interface RoomState {
@@ -21,9 +22,9 @@ const ROOM_PATH = "/room/3v3" as const;
 
 export default function Room3v3Page() {
   const [, setLocation] = useLocation();
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const { send, onMessage, connected } = useWs(token);
+  const { send, onMessage, connected } = useWsContext();
 
   const searchParams = new URLSearchParams(window.location.search);
   const initialCode = searchParams.get("code")?.trim().toUpperCase() ?? "";
