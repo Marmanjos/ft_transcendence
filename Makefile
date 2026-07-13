@@ -1,7 +1,7 @@
 DOCKER = docker
 COMPOSE = $(DOCKER) compose -f srcs/docker-compose.yml
 PROJECT_URL = https://localhost
-DATA_DIRS = /home/atambo/data/backend /home/atambo/data/database
+DATA_DIRS = /home/$(USER)/data/backend /home/$(USER)/data/database
 CERTS_DIR = secrets
 
 all: setup
