@@ -52,16 +52,14 @@ export default function History() {
                       </div>
                     </div>
                     <div className="w-32 text-right">
-                      {match.status === MatchStatus.COMPLETED ? (
+                      {match.status === MatchStatus.COMPLETED || match.status === MatchStatus.ABANDONED ? (
                         user && match.winnerId === user.id ? (
                           <span className="text-primary font-black uppercase tracking-widest text-sm neon-text">Vitória</span>
-                        ) : match.winnerId === null ? (
+                        ) : match.player1Score === match.player2Score && match.status === MatchStatus.COMPLETED ? (
                           <span className="text-muted-foreground font-black uppercase tracking-widest text-sm">Empate</span>
                         ) : (
                           <span className="text-destructive font-black uppercase tracking-widest text-sm neon-text-destructive">Derrota</span>
                         )
-                      ) : match.status === MatchStatus.ABANDONED ? (
-                        <span className="text-destructive/70 font-black uppercase tracking-widest text-sm line-through">Abandono</span>
                       ) : (
                         <span className="text-accent font-bold uppercase tracking-widest text-sm">Em Andamento</span>
                       )}
