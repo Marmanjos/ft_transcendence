@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { useWs } from "@/hooks/use-ws";
 import { useToast } from "@/hooks/use-toast";
 import { BUILD_TAG } from "@/lib/build-tag";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { useNotifications, type AppNotification } from "@/hooks/use-notifications";
 import { useListFriends } from "@workspace/api-client-react";
 
@@ -52,7 +52,16 @@ function NotificationBell() {
       </SheetTrigger>
       <SheetContent side="right" className="w-80 bg-card border-border flex flex-col">
         <SheetHeader className="flex flex-row items-center justify-between pr-6">
-          <SheetTitle className="uppercase tracking-widest text-sm font-mono">Notificações</SheetTitle>
+          <div className="flex flex-col text-left">
+            <SheetTitle className="uppercase tracking-widest text-sm font-mono">
+              Notificações
+            </SheetTitle>
+            {/* Esta linha resolve o erro de ARIA sem alterar o teu layout visual */}
+            <SheetDescription className="sr-only">
+              Lista de notificações do utilizador e pedidos de amizade.
+            </SheetDescription>
+          </div>
+          
           {unreadCount > 0 && (
             <Button
               variant="ghost"
