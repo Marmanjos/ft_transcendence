@@ -55,7 +55,7 @@ export default function History() {
                       {match.status === MatchStatus.COMPLETED ? (
                         user && match.winnerId === user.id ? (
                           <span className="text-primary font-black uppercase tracking-widest text-sm neon-text">Vitória</span>
-                        ) : match.player1Score === match.player2Score ? (
+                        ) : match.winnerId === null ? (
                           <span className="text-muted-foreground font-black uppercase tracking-widest text-sm">Empate</span>
                         ) : (
                           <span className="text-destructive font-black uppercase tracking-widest text-sm neon-text-destructive">Derrota</span>
