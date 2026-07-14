@@ -5,6 +5,8 @@ import { requireAuth } from "../lib/auth.js";
 import { AddFriendBody, AcceptFriendParams, RemoveFriendParams } from "@workspace/api-zod";
 import { sendToUser } from "../lib/wsServer.js";
 import { createNotification } from "../lib/notifications.js";
+import fs from "fs";
+import path from "path";
 
 const router: IRouter = Router();
 
@@ -46,13 +48,32 @@ router.get("/friends", requireAuth, async (req, res): Promise<void> => {
         status = "REQUEST_RECEIVED";
       }
 
+      let finalAvatarUrl = friend?.avatarUrl ?? null;
+
+      // Validação em tempo real para evitar links fantasmas na lista de amigos
+      if (friend && finalAvatarUrl) {
+        const filename = finalAvatarUrl.replace("/uploads/", "");
+        const filePath = path.join(process.cwd(), "uploads", filename);
+
+        if (!fs.existsSync(filePath)) {
+          // Limpa a DB silenciosamente em background
+          db.update(usersTable)
+            .set({ avatarUrl: null })
+            .where(eq(usersTable.id, friend.id))
+            .execute()
+            .catch((err) => console.error("Erro ao limpar avatar na lista de amigos:", err));
+
+          finalAvatarUrl = null; // Força o envio imediato de null para o frontend
+        }
+      }
+
       return {
         id: f.id,
         friend: friend ? {
           id: friend.id,
           username: friend.username,
           email: friend.email,
-          avatarUrl: friend.avatarUrl ?? null,
+          avatarUrl: finalAvatarUrl,
           createdAt: friend.createdAt.toISOString(),
         } : null,
         status,

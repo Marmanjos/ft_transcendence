@@ -5,9 +5,12 @@ import { eq, or, sql, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { GetUserParams, UpdateUserParams, UpdateUserBody } from "@workspace/api-zod";
 import { upload } from "../lib/upload.js";
+import fs from "fs";
+import path from "path";
 
 const router: IRouter = Router();
 
+// 1. ONLINE STATUS
 router.get("/users/online-status", requireAuth, async (req, res): Promise<void> => {
   const raw = typeof req.query.ids === "string" ? req.query.ids : "";
   const ids = raw.split(",").map(Number).filter(n => Number.isInteger(n) && n > 0);
@@ -20,7 +23,7 @@ router.get("/users/online-status", requireAuth, async (req, res): Promise<void> 
   res.json({ online: getOnlineUserIds(ids) });
 });
 
-
+// 2. GET USER PROFILE (Apenas uma definição, corrigida e com suporte a Docker)
 router.get("/users/:id", async (req, res): Promise<void> => {
   const params = GetUserParams.safeParse(req.params);
   if (!params.success) {
@@ -39,15 +42,35 @@ router.get("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  let finalAvatarUrl = user.avatarUrl ?? null;
+
+  // Garante a existência física do ficheiro no disco do Container
+  if (finalAvatarUrl) {
+    const filename = finalAvatarUrl.replace("/uploads/", "");
+    const filePath = path.join(process.cwd(), "uploads", filename);
+
+    if (!fs.existsSync(filePath)) {
+      // Correção imediata em background para limpar a DB de forma assíncrona
+      db.update(usersTable)
+        .set({ avatarUrl: null })
+        .where(eq(usersTable.id, user.id))
+        .execute()
+        .catch((err) => console.error("Erro ao limpar avatarUrl fantasma:", err));
+
+      finalAvatarUrl = null; 
+    }
+  }
+
   res.json({
     id: user.id,
     username: user.username,
     email: user.email,
-    avatarUrl: user.avatarUrl ?? null,
+    avatarUrl: finalAvatarUrl,
     createdAt: user.createdAt.toISOString(),
   });
 });
 
+// 3. UPDATE USER PROFILE
 router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   const params = UpdateUserParams.safeParse(req.params);
   if (!params.success) {
@@ -86,12 +109,29 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+// 4. UPLOAD AVATAR
 router.post("/users/me/avatar", requireAuth, upload.single("avatar"), async (req, res): Promise<void> => {
     const userId = req.user!.userId;
 
     if (!req.file) {
       res.status(400).json({ error: "Nenhum ficheiro enviado" });
       return;
+    }
+
+    const [currentUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+
+    // Apaga de forma resiliente usando o caminho de trabalho atual do Docker
+    if (currentUser && currentUser.avatarUrl) {
+      const oldFilename = currentUser.avatarUrl.replace("/uploads/", "");
+      const oldFilePath = path.join(process.cwd(), "uploads", oldFilename);
+
+      fs.unlink(oldFilePath, (err) => {
+        if (err) console.error(`Aviso ao apagar ficheiro antigo: ${err.message}`);
+      });
     }
 
     const avatarUrl = `/uploads/${req.file.filename}`;
@@ -112,6 +152,7 @@ router.post("/users/me/avatar", requireAuth, upload.single("avatar"), async (req
   }
 );
 
+// 5. USER STATS
 router.get("/users/:id/stats", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const userId = parseInt(raw, 10);
@@ -145,7 +186,6 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
   const totalMatches = completedMatches.length;
   const winRate = totalMatches > 0 ? wins / totalMatches : 0;
 
-  // Compute favorite elemental from rounds
   const rounds = await db
     .select({ player1Choice: roundsTable.player1Choice, matchId: roundsTable.matchId })
     .from(roundsTable)
