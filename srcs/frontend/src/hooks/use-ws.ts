@@ -5,7 +5,7 @@ export type ServerMsg =
   | { type: "MATCH_FOUND"; matchId: number; opponentUsername: string; yourSide: "player1" | "player2" }
   | { type: "WAITING_FOR_OPPONENT" }
   | { type: "ROUND_RESULT"; roundNumber: number; player1Choice: string; player2Choice: string; yourOutcome: "WIN" | "LOSS" | "DRAW"; player1Score: number; player2Score: number }
-  | { type: "MATCH_OVER"; winnerId: number | null; player1Score: number; player2Score: number }
+  | { type: "MATCH_OVER"; winnerId: number | null; player1Score: number; player2Score: number; rewards?: { xpGained: number; newXp: number; newLevel: number; leveledUp: boolean; newlyUnlockedAchievements: { key: string; name: string; description: string }[] } }
   | { type: "REMATCH_OFFERED" }
   | { type: "REMATCH_WAITING" }
   | { type: "OPPONENT_DISCONNECTED" }

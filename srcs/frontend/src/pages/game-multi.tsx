@@ -9,6 +9,7 @@ import { ArenaBackground } from "@/components/arena-background";
 import { PauseMenu } from "@/components/pause-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useWs, type ServerMsg } from "@/hooks/use-ws";
+import { useToast } from "@/hooks/use-toast";
 import { Pause } from "lucide-react";
 
 type MultiState =
@@ -44,6 +45,7 @@ const ELEMENTALS = [Elemental.TITAN, Elemental.RAZOR, Elemental.WRAITH];
 export default function GameMulti() {
   const [, setLocation] = useLocation();
   const { token, user } = useAuth();
+  const { toast } = useToast();
 
   const [state, setState] = useState<MultiState>("CONNECTING");
   const [matchInfo, setMatchInfo] = useState<MatchInfo | null>(null);
@@ -113,6 +115,24 @@ export default function GameMulti() {
 
         case "MATCH_OVER":
           setMatchOver({ winnerId: msg.winnerId, player1Score: msg.player1Score, player2Score: msg.player2Score });
+          // Mostrar recompensas ao fim da partida multiplayer
+          if (msg.rewards) {
+            const { xpGained, leveledUp, newLevel, newlyUnlockedAchievements } = msg.rewards;
+            setTimeout(() => {
+              toast({
+                title: leveledUp ? `⬆️ Nível ${newLevel}!` : `+${xpGained} XP`,
+                description: leveledUp
+                  ? `Parabéns! Você subiu para o nível ${newLevel}.`
+                  : `Você ganhou ${xpGained} XP nesta partida.`,
+              });
+              for (const achievement of newlyUnlockedAchievements) {
+                toast({
+                  title: `🏆 Conquista: ${achievement.name}`,
+                  description: achievement.description,
+                });
+              }
+            }, 1600); // pequeno delay para o overlay de fim de partida aparecer primeiro
+          }
           setTimeout(() => setState("MATCH_OVER"), 1500);
           break;
 
