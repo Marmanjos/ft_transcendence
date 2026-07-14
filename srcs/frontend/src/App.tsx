@@ -30,6 +30,7 @@ import Friends from "@/pages/friends";
 import Groups from "@/pages/groups";
 import GroupDetail from "@/pages/group-detail";
 import MatchDetail from "@/pages/match-detail";
+import Status from "@/pages/status";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ function LayoutRoutes() {
         <Route path="/" component={Home} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
+        <Route path="/status" component={Status} />
 
         <Route path="/lobby">
           <ProtectedRoute><Lobby /></ProtectedRoute>
