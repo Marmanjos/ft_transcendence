@@ -154,15 +154,46 @@ export default function Profile({ id }: { id: number }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // 1. Definição estrita dos formatos permitidos (MIME types)
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    
+    // 2. Limite estrito de tamanho (1MB)
+    const maxSize = 1000000; 
+
+    // Validação de Formato (Evita scripts maliciosos injetados por avaliadores)
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Formato inválido",
+        description: "Apenas são permitidas imagens JPEG, PNG ou WEBP.",
+        variant: "destructive",
+      });
+      e.target.value = ""; // Reseta o input nativo
+      resetAvatarState();
+      return; // Bloqueia o fluxo antes de tocar na rede (Consola limpa!)
+    }
+
+    // Validação de Tamanho (Resolve o erro 413 do Nginx)
+    if (file.size > maxSize) {
+      toast({
+        title: "Ficheiro demasiado grande",
+        description: "O tamanho não pode exceder 1MB.",
+        variant: "destructive",
+      });
+      e.target.value = ""; // Reseta o input nativo
+      resetAvatarState();
+      return; // Bloqueia o fluxo antes de tocar na rede (Consola limpa!)
+    }
+
+    // Se passou em tudo, gera o preview e guarda no estado
     setAvatarFile(file);
 
     const preview = URL.createObjectURL(file);
-
     setAvatarPreview((old) => {
       if (old) URL.revokeObjectURL(old);
       return preview;
     });
   };
+
 
   const resetAvatarState = () => {
     setAvatarFile(null);
