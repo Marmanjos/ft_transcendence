@@ -221,18 +221,18 @@ router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
 
   // Name validation
   if (name.length < 3 || name.length > 80) {
-    res.status(400).json({ error: "Nome deve ter entre 3 e 80 caracteres" });
+    res.status(200).json({ success: false, error: "Nome deve ter entre 3 e 80 caracteres" });
     return;
   }
   const nameRegex = /^[a-zA-Z0-9À-ÿ\s\-_]+$/;
   if (!nameRegex.test(name)) {
-    res.status(400).json({ error: "Nome inválido. Use apenas letras, números, espaços, hífen ou sublinhado." });
+    res.status(200).json({ success: false, error: "Nome inválido. Use apenas letras, números, espaços, hífen ou sublinhado." });
     return;
   }
 
   // Description validation limit (max 200 chars)
   if (description && description.length > 200) {
-    res.status(400).json({ error: "Descrição deve ter no máximo 200 caracteres" });
+    res.status(200).json({ success: false, error: "Descrição deve ter no máximo 200 caracteres" });
     return;
   }
 
@@ -247,7 +247,7 @@ router.post("/organizations", requireAuth, async (req, res): Promise<void> => {
       )
     );
   if (userOrgs.length >= 10) {
-    res.status(400).json({ error: "Você atingiu o limite de 10 grupos" });
+    res.status(200).json({ success: false, error: "Você atingiu o limite de 10 grupos" });
     return;
   }
 
@@ -287,7 +287,7 @@ router.post("/organizations/:id/accept", requireAuth, async (req, res): Promise<
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
   if (!Number.isInteger(organizationId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -304,7 +304,7 @@ router.post("/organizations/:id/accept", requireAuth, async (req, res): Promise<
     .limit(1);
 
   if (!membership) {
-    res.status(404).json({ error: "Convite não encontrado" });
+    res.status(200).json({ success: false, error: "Convite não encontrado" });
     return;
   }
 
@@ -319,7 +319,7 @@ router.post("/organizations/:id/accept", requireAuth, async (req, res): Promise<
       )
     );
   if (userOrgs.length >= 10) {
-    res.status(400).json({ error: "Você atingiu o limite de 10 grupos" });
+    res.status(200).json({ success: false, error: "Você atingiu o limite de 10 grupos" });
     return;
   }
 
@@ -334,7 +334,7 @@ router.post("/organizations/:id/accept", requireAuth, async (req, res): Promise<
       )
     );
   if (orgMembers.length >= 50) {
-    res.status(400).json({ error: "O grupo atingiu o limite de 50 membros" });
+    res.status(200).json({ success: false, error: "O grupo atingiu o limite de 50 membros" });
     return;
   }
 
@@ -351,7 +351,7 @@ router.post("/organizations/:id/decline", requireAuth, async (req, res): Promise
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
   if (!Number.isInteger(organizationId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -373,7 +373,7 @@ router.post("/organizations/:id/join", requireAuth, async (req, res): Promise<vo
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
   if (!Number.isInteger(organizationId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -384,7 +384,7 @@ router.post("/organizations/:id/join", requireAuth, async (req, res): Promise<vo
     .limit(1);
 
   if (!organization) {
-    res.status(404).json({ error: "Grupo não encontrado" });
+    res.status(200).json({ success: false, error: "Grupo não encontrado" });
     return;
   }
 
@@ -411,9 +411,9 @@ router.post("/organizations/:id/join", requireAuth, async (req, res): Promise<vo
 
   if (existing) {
     if (existing.status === "ACCEPTED") {
-      res.status(400).json({ error: "Você já está neste grupo" });
+      res.status(200).json({ success: false, error: "Você já está neste grupo" });
     } else {
-      res.status(400).json({ error: "Você já tem um convite pendente para este grupo" });
+      res.status(200).json({ success: false, error: "Você já tem um convite pendente para este grupo" });
     }
     return;
   }
@@ -429,7 +429,7 @@ router.post("/organizations/:id/join", requireAuth, async (req, res): Promise<vo
       )
     );
   if (userOrgs.length >= 10) {
-    res.status(400).json({ error: "Você atingiu o limite de 10 grupos" });
+    res.status(200).json({ success: false, error: "Você atingiu o limite de 10 grupos" });
     return;
   }
 
@@ -444,7 +444,7 @@ router.post("/organizations/:id/join", requireAuth, async (req, res): Promise<vo
       )
     );
   if (orgMembers.length >= 50) {
-    res.status(400).json({ error: "O grupo atingiu o limite de 50 membros" });
+    res.status(200).json({ success: false, error: "O grupo atingiu o limite de 50 membros" });
     return;
   }
 
@@ -465,7 +465,7 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
   if (!Number.isInteger(organizationId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -479,7 +479,7 @@ router.get("/organizations/:id", requireAuth, async (req, res): Promise<void> =>
     .limit(1);
 
   if (!organization) {
-    res.status(404).json({ error: "Organização não encontrada" });
+    res.status(200).json({ success: false, error: "Organização não encontrada" });
     return;
   }
 
@@ -550,7 +550,7 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
   if (!Number.isInteger(organizationId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -570,18 +570,18 @@ router.patch("/organizations/:id", requireAuth, async (req, res): Promise<void> 
 
   if (name !== undefined) {
     if (name.length < 3 || name.length > 80) {
-      res.status(400).json({ error: "Nome deve ter entre 3 e 80 caracteres" });
+      res.status(200).json({ success: false, error: "Nome deve ter entre 3 e 80 caracteres" });
       return;
     }
     const nameRegex = /^[a-zA-Z0-9À-ÿ\s\-_]+$/;
     if (!nameRegex.test(name)) {
-      res.status(400).json({ error: "Nome inválido. Use apenas letras, números, espaços, hífen ou sublinhado." });
+      res.status(200).json({ success: false, error: "Nome inválido. Use apenas letras, números, espaços, hífen ou sublinhado." });
       return;
     }
   }
 
   if (description !== undefined && description !== null && description.length > 200) {
-    res.status(400).json({ error: "Descrição deve ter no máximo 200 caracteres" });
+    res.status(200).json({ success: false, error: "Descrição deve ter no máximo 200 caracteres" });
     return;
   }
 
@@ -615,7 +615,7 @@ router.delete("/organizations/:id", requireAuth, async (req, res): Promise<void>
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
   if (!Number.isInteger(organizationId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -635,7 +635,7 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
   const organizationId = Number(req.params.id);
   const currentUserId = req.user!.userId;
   if (!Number.isInteger(organizationId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -649,7 +649,7 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
   const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
   const role = normalizeRole(req.body?.role);
   if (!username) {
-    res.status(400).json({ error: "Username é obrigatório" });
+    res.status(200).json({ success: false, error: "Username é obrigatório" });
     return;
   }
 
@@ -660,7 +660,7 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
     .limit(1);
 
   if (!user) {
-    res.status(404).json({ error: "Usuário não encontrado" });
+    res.status(200).json({ success: false, error: "Usuário não encontrado" });
     return;
   }
 
@@ -677,9 +677,9 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
 
   if (existing) {
     if (existing.status === "ACCEPTED") {
-      res.status(409).json({ error: "Usuário já está na organização" });
+      res.status(200).json({ success: false, error: "Usuário já está na organização" });
     } else {
-      res.status(409).json({ error: "Usuário já possui um convite pendente para este grupo" });
+      res.status(200).json({ success: false, error: "Usuário já possui um convite pendente para este grupo" });
     }
     return;
   }
@@ -695,7 +695,7 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
       )
     );
   if (targetUserOrgsCount.length >= 10) {
-    res.status(400).json({ error: "O usuário já atingiu o limite de 10 grupos" });
+    res.status(200).json({ success: false, error: "O usuário já atingiu o limite de 10 grupos" });
     return;
   }
 
@@ -710,7 +710,7 @@ router.post("/organizations/:id/members", requireAuth, async (req, res): Promise
       )
     );
   if (activeMembersCount.length >= 50) {
-    res.status(400).json({ error: "O grupo já atingiu o limite de 50 membros" });
+    res.status(200).json({ success: false, error: "O grupo já atingiu o limite de 50 membros" });
     return;
   }
 
@@ -747,7 +747,7 @@ router.patch("/organizations/:id/members/:userId", requireAuth, async (req, res)
   const targetUserId = Number(req.params.userId);
   const currentUserId = req.user!.userId;
   if (!Number.isInteger(organizationId) || !Number.isInteger(targetUserId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -760,18 +760,18 @@ router.patch("/organizations/:id/members/:userId", requireAuth, async (req, res)
 
   const role = req.body?.role;
   if (role !== "ADMIN" && role !== "MEMBER") {
-    res.status(400).json({ error: "Cargo inválido. Escolha ADMIN ou MEMBER" });
+    res.status(200).json({ success: false, error: "Cargo inválido. Escolha ADMIN ou MEMBER" });
     return;
   }
 
   const targetMembership = await getMembership(organizationId, targetUserId);
   if (!targetMembership) {
-    res.status(404).json({ error: "Membro não encontrado" });
+    res.status(200).json({ success: false, error: "Membro não encontrado" });
     return;
   }
 
   if (targetMembership.role === "OWNER") {
-    res.status(400).json({ error: "O dono do grupo não pode ser alterado" });
+    res.status(200).json({ success: false, error: "O dono do grupo não pode ser alterado" });
     return;
   }
 
@@ -794,13 +794,13 @@ router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res
   const targetUserId = Number(req.params.userId);
   const currentUserId = req.user!.userId;
   if (!Number.isInteger(organizationId) || !Number.isInteger(targetUserId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
   const targetMembership = await getMembership(organizationId, targetUserId);
   if (!targetMembership) {
-    res.status(404).json({ error: "Membro não encontrado" });
+    res.status(200).json({ success: false, error: "Membro não encontrado" });
     return;
   }
 
@@ -822,7 +822,7 @@ router.delete("/organizations/:id/members/:userId", requireAuth, async (req, res
   }
 
   if (normalizeRole(targetMembership.role) === "OWNER") {
-    res.status(400).json({ error: "O dono da organização não pode ser removido" });
+    res.status(200).json({ success: false, error: "O dono da organização não pode ser removido" });
     return;
   }
 
@@ -843,7 +843,7 @@ router.post("/organizations/:id/messages", requireAuth, async (req, res): Promis
   const organizationId = Number(req.params.id);
   const userId = req.user!.userId;
   if (!Number.isInteger(organizationId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 
@@ -852,7 +852,7 @@ router.post("/organizations/:id/messages", requireAuth, async (req, res): Promis
 
   const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
   if (!text || text.length > 500) {
-    res.status(400).json({ error: "Mensagem deve ter entre 1 e 500 caracteres" });
+    res.status(200).json({ success: false, error: "Mensagem deve ter entre 1 e 500 caracteres" });
     return;
   }
 

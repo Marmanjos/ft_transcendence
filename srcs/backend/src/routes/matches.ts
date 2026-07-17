@@ -66,7 +66,7 @@ router.get("/matches", requireAuth, async (req, res): Promise<void> => {
 router.post("/matches", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateMatchBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(200).json({ success: false, error: parsed.error.message });
     return;
   }
 
@@ -94,7 +94,7 @@ router.post("/matches", requireAuth, async (req, res): Promise<void> => {
 router.get("/matches/:id", requireAuth, async (req, res): Promise<void> => {
   const params = GetMatchParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    res.status(200).json({ success: false, error: params.error.message });
     return;
   }
 
@@ -105,7 +105,7 @@ router.get("/matches/:id", requireAuth, async (req, res): Promise<void> => {
     .limit(1);
 
   if (!match) {
-    res.status(404).json({ error: "Partida não encontrada" });
+    res.status(200).json({ success: false, error: "Partida não encontrada" });
     return;
   }
 
@@ -142,13 +142,13 @@ router.get("/matches/:id", requireAuth, async (req, res): Promise<void> => {
 router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> => {
   const params = SubmitRoundParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    res.status(200).json({ success: false, error: params.error.message });
     return;
   }
 
   const parsed = SubmitRoundBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(200).json({ success: false, error: parsed.error.message });
     return;
   }
 
@@ -159,12 +159,12 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
     .limit(1);
 
   if (!match) {
-    res.status(404).json({ error: "Partida não encontrada" });
+    res.status(200).json({ success: false, error: "Partida não encontrada" });
     return;
   }
 
   if (match.status !== "ACTIVE") {
-    res.status(400).json({ error: "Partida já finalizada" });
+    res.status(200).json({ success: false, error: "Partida já finalizada" });
     return;
   }
 
@@ -175,7 +175,7 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
 
   const roundNumber = existingRounds.length + 1;
   if (roundNumber > 3) {
-    res.status(400).json({ error: "Partida já completou todas as rodadas" });
+    res.status(200).json({ success: false, error: "Partida já completou todas as rodadas" });
     return;
   }
 
@@ -245,7 +245,7 @@ router.post("/matches/:id/rounds", requireAuth, async (req, res): Promise<void> 
 router.post("/matches/:id/abandon", requireAuth, async (req, res): Promise<void> => {
   const params = GetMatchParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    res.status(200).json({ success: false, error: params.error.message });
     return;
   }
 
@@ -256,12 +256,12 @@ router.post("/matches/:id/abandon", requireAuth, async (req, res): Promise<void>
     .limit(1);
 
   if (!match) {
-    res.status(404).json({ error: "Partida não encontrada" });
+    res.status(200).json({ success: false, error: "Partida não encontrada" });
     return;
   }
 
   if (match.status !== "ACTIVE") {
-    res.status(400).json({ error: "Partida já finalizada" });
+    res.status(200).json({ success: false, error: "Partida já finalizada" });
     return;
   }
 

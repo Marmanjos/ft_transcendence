@@ -27,7 +27,7 @@ router.get("/users/online-status", requireAuth, async (req, res): Promise<void> 
 router.get("/users/:id", async (req, res): Promise<void> => {
   const params = GetUserParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    res.status(200).json({ success: false, error: params.error.message });
     return;
   }
 
@@ -38,7 +38,7 @@ router.get("/users/:id", async (req, res): Promise<void> => {
     .limit(1);
 
   if (!user) {
-    res.status(404).json({ error: "Usuário não encontrado" });
+    res.status(200).json({ success: false, error: "Usuário não encontrado" });
     return;
   }
 
@@ -74,7 +74,7 @@ router.get("/users/:id", async (req, res): Promise<void> => {
 router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   const params = UpdateUserParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    res.status(200).json({ success: false, error: params.error.message });
     return;
   }
 
@@ -85,7 +85,7 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
 
   const parsed = UpdateUserBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(200).json({ success: false, error: parsed.error.message });
     return;
   }
 
@@ -96,7 +96,7 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   if (!user) {
-    res.status(404).json({ error: "Usuário não encontrado" });
+    res.status(200).json({ success: false, error: "Usuário não encontrado" });
     return;
   }
 
@@ -114,7 +114,7 @@ router.post("/users/me/avatar", requireAuth, upload.single("avatar"), async (req
     const userId = req.user!.userId;
 
     if (!req.file) {
-      res.status(400).json({ error: "Nenhum ficheiro enviado" });
+      res.status(200).json({ success: false, error: "Nenhum ficheiro enviado" });
       return;
     }
 
@@ -157,7 +157,7 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const userId = parseInt(raw, 10);
   if (isNaN(userId)) {
-    res.status(400).json({ error: "ID inválido" });
+    res.status(200).json({ success: false, error: "ID inválido" });
     return;
   }
 

@@ -57,31 +57,61 @@ export default function Profile({ id }: { id: number }) {
 
   const handleAddFriend = async () => {
     try {
-      await addFriendMutation.mutateAsync({ data: { friendId: id } });
+      const response = await addFriendMutation.mutateAsync({ data: { friendId: id } });
+      
+      if (response && (response as any).success === false) {
+        toast({ 
+          title: "Erro", 
+          description: (response as any).error || "Ocorreu um erro.", 
+          variant: "destructive" 
+        }); 
+        return; 
+      }
+
       toast({ title: "Solicitação enviada", description: "Convite de amizade enviado!" });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
     } catch (err: any) {
-      toast({ title: "Erro", description: err.response?.data?.error || "Não foi possível enviar solicitação.", variant: "destructive" });
+      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
     }
   };
 
   const handleAcceptFriend = async (fid: number) => {
     try {
-      await acceptFriendMutation.mutateAsync({ id: fid });
+      const response = await acceptFriendMutation.mutateAsync({ id: fid });
+      
+      if (response && (response as any).success === false) {
+        toast({ 
+          title: "Erro", 
+          description: (response as any).error || "Ocorreu um erro.", 
+          variant: "destructive" 
+        }); 
+        return; 
+      }
+
       toast({ title: "Amizade aceita", description: "Agora vocês são amigos!" });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
     } catch (err) {
-      toast({ title: "Erro", description: "Não foi possível aceitar a solicitação.", variant: "destructive" });
+      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
     }
   };
 
   const handleRemoveFriend = async (fid: number, isRequest = false) => {
     try {
-      await removeFriendMutation.mutateAsync({ id: fid });
+      const response = await removeFriendMutation.mutateAsync({ id: fid });
+      
+      if (response && (response as any).success === false) {
+        toast({ 
+          title: "Erro", 
+          description: (response as any).error || "Ocorreu um erro.", 
+          variant: "destructive" 
+        }); 
+        return; 
+      }
+
       toast({ title: isRequest ? "Solicitação removida" : "Amigo removido", description: isRequest ? "A solicitação foi cancelada/rejeitada." : "Usuário removido da lista de amigos." });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
     } catch (err) {
-      toast({ title: "Erro", description: "Não foi possível concluir a ação.", variant: "destructive" });
+      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
     }
   };
 
@@ -93,24 +123,30 @@ export default function Profile({ id }: { id: number }) {
     });
     setLocation("/room");
   };
-  // Note: we fetch global matches and filter client side for now, or just show recent since ListMatches doesn't take a userId param in the provided schema.
-  // Actually ListMatches says "Get match history for current user", so if this profile is not the current user, we can't see their matches via listMatches.
-  // We'll skip matches if it's not the current user, but the schema doesn't provide a way to check. Let's just show the stats.
 
   const handleSave = async () => {
     try {
-      await updateUser.mutateAsync({
+      const response = await updateUser.mutateAsync({
         id: user.id,
         data: {
           username: username.trim(),
         },
       });
 
+      if (response && (response as any).success === false) {
+        toast({
+          title: "Erro ao atualizar perfil",
+          description: (response as any).error || "Algo correu mal.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       if (avatarFile) {
         const formData = new FormData();
         formData.append("avatar", avatarFile);
 
-        await fetch("/api/users/me/avatar", {
+        const avatarRes = await fetch("/api/users/me/avatar", {
           method: "POST",
           body: formData,
           headers: {
@@ -118,14 +154,16 @@ export default function Profile({ id }: { id: number }) {
           },
         });
 
-        queryClient.invalidateQueries({
-          queryKey: ["/api/users", user.id],
-        });
+        if (!avatarRes.ok) {
+          const errorData = await avatarRes.json().catch(() => ({}));
+          throw new Error(errorData.error || "Falha no upload do avatar");
+        }
 
         queryClient.invalidateQueries({
           queryKey: ["/api/auth/me"],
         });
       }
+
       queryClient.invalidateQueries({
         queryKey: ["/api/users", user.id],
       });
@@ -144,47 +182,42 @@ export default function Profile({ id }: { id: number }) {
     } catch (error: any) {
       toast({
         title: "Erro ao atualizar perfil",
-        description: "Algo correu mal.",
+        description: error.message || "Algo correu mal.",
         variant: "destructive",
       });
     }
   };
 
+
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 1. Definição estrita dos formatos permitidos (MIME types)
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    
-    // 2. Limite estrito de tamanho (1MB)
     const maxSize = 1000000; 
 
-    // Validação de Formato (Evita scripts maliciosos injetados por avaliadores)
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Formato inválido",
         description: "Apenas são permitidas imagens JPEG, PNG ou WEBP.",
         variant: "destructive",
       });
-      e.target.value = ""; // Reseta o input nativo
+      e.target.value = ""; 
       resetAvatarState();
-      return; // Bloqueia o fluxo antes de tocar na rede (Consola limpa!)
+      return; 
     }
 
-    // Validação de Tamanho (Resolve o erro 413 do Nginx)
     if (file.size > maxSize) {
       toast({
         title: "Ficheiro demasiado grande",
         description: "O tamanho não pode exceder 1MB.",
         variant: "destructive",
       });
-      e.target.value = ""; // Reseta o input nativo
+      e.target.value = ""; 
       resetAvatarState();
-      return; // Bloqueia o fluxo antes de tocar na rede (Consola limpa!)
+      return; 
     }
 
-    // Se passou em tudo, gera o preview e guarda no estado
     setAvatarFile(file);
 
     const preview = URL.createObjectURL(file);
@@ -193,7 +226,6 @@ export default function Profile({ id }: { id: number }) {
       return preview;
     });
   };
-
 
   const resetAvatarState = () => {
     setAvatarFile(null);

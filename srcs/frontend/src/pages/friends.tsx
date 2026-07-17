@@ -60,9 +60,20 @@ export default function Friends() {
 
     setBusy(true);
     try {
-      await addFriendMutation.mutateAsync({
+      const response = await addFriendMutation.mutateAsync({
         data: { username: target }
       });
+
+      // Interceta o erro 200 controlado do backend (ex: usuário não existe)
+      if (response && (response as any).success === false) {
+        toast({
+          title: "Erro ao adicionar amigo",
+          description: (response as any).error || "Usuário não encontrado ou já adicionado.",
+          variant: "destructive"
+        });
+        return; // Bloqueia o sucesso
+      }
+
       toast({
         title: "Solicitação enviada",
         description: `Convite enviado para ${target} com sucesso!`,
@@ -70,9 +81,10 @@ export default function Friends() {
       setUsernameInput("");
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
     } catch (err: any) {
+      // Só entra aqui se o servidor cair (status 500)
       toast({
         title: "Erro ao adicionar amigo",
-        description: err.response?.data?.error || "Usuário não encontrado ou já adicionado.",
+        description: "Falha crítica na ligação com o servidor.",
         variant: "destructive"
       });
     } finally {
@@ -82,7 +94,17 @@ export default function Friends() {
 
   const handleAcceptRequest = async (id: number, username: string) => {
     try {
-      await acceptFriendMutation.mutateAsync({ id });
+      const response = await acceptFriendMutation.mutateAsync({ id });
+
+      if (response && (response as any).success === false) {
+        toast({
+          title: "Erro ao aceitar solicitação",
+          description: (response as any).error || "Não foi possível aceitar a amizade.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       toast({
         title: "Solicitação aceita",
         description: `Agora você e ${username} são amigos!`,
@@ -91,7 +113,7 @@ export default function Friends() {
     } catch (err) {
       toast({
         title: "Erro ao aceitar solicitação",
-        description: "Algo deu errado. Tente novamente.",
+        description: "Falha crítica na ligação com o servidor.",
         variant: "destructive"
       });
     }
@@ -104,7 +126,17 @@ export default function Friends() {
       : `Você removeu ${username} da sua lista de amigos.`;
 
     try {
-      await removeFriendMutation.mutateAsync({ id });
+      const response = await removeFriendMutation.mutateAsync({ id });
+
+      if (response && (response as any).success === false) {
+        toast({
+          title: "Erro ao realizar ação",
+          description: (response as any).error || "Algo deu errado. Tente novamente.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       toast({
         title: messageTitle,
         description: messageDesc,
@@ -113,7 +145,7 @@ export default function Friends() {
     } catch (err) {
       toast({
         title: "Erro ao realizar ação",
-        description: "Algo deu errado. Tente novamente.",
+        description: "Falha crítica na ligação com o servidor.",
         variant: "destructive"
       });
     }

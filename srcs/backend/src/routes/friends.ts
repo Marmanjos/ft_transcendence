@@ -93,7 +93,7 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
 
   const parsed = AddFriendBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(200).json({ success: false, error: parsed.error.message });
     return;
   }
 
@@ -107,7 +107,7 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
       .limit(1);
 
     if (!currentUser) {
-      res.status(404).json({ error: "Usuário atual não encontrado" });
+      res.status(200).json({ success: false, error: "Usuário atual não encontrado" });
       return;
     }
 
@@ -115,7 +115,7 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
 
     if (friendId !== undefined) {
       if (friendId === currentUserId) {
-        res.status(400).json({ error: "Você não pode adicionar a si mesmo" });
+        res.status(200).json({ success: false, error: "Você não pode adicionar a si mesmo" });
         return;
       }
       [targetUser] = await db
@@ -127,7 +127,7 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
       const cleanUsername = username.trim();
 
       if (currentUser.username.toLowerCase() === cleanUsername.toLowerCase()) {
-        res.status(400).json({ error: "Você não pode adicionar a si mesmo" });
+        res.status(200).json({ success: false, error: "Você não pode adicionar a si mesmo" });
         return;
       }
 
@@ -139,7 +139,7 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
     }
 
     if (!targetUser) {
-      res.status(404).json({ error: "Usuário não encontrado" });
+      res.status(200).json({ success: false, error: "Usuário não encontrado" });
       return;
     }
 
@@ -159,12 +159,12 @@ router.post("/friends", requireAuth, async (req, res): Promise<void> => {
 
     if (existing) {
       if (existing.status === "ACCEPTED") {
-        res.status(400).json({ error: "Vocês já são amigos" });
+        res.status(200).json({ success: false, error: "Vocês já são amigos" });
         return;
       }
       
       if (existing.userId === currentUserId) {
-        res.status(400).json({ error: "Solicitação de amizade já enviada" });
+        res.status(200).json({ success: false, error: "Solicitação de amizade já enviada" });
         return;
       }
 
@@ -226,7 +226,7 @@ router.post("/friends/:id/accept", requireAuth, async (req, res): Promise<void> 
 
   const parsedParams = AcceptFriendParams.safeParse(req.params);
   if (!parsedParams.success) {
-    res.status(400).json({ error: parsedParams.error.message });
+    res.status(200).json({ success: false, error: parsedParams.error.message });
     return;
   }
 
@@ -240,7 +240,7 @@ router.post("/friends/:id/accept", requireAuth, async (req, res): Promise<void> 
       .limit(1);
 
     if (!friendship) {
-      res.status(404).json({ error: "Solicitação não encontrada" });
+      res.status(200).json({ success: false, error: "Solicitação não encontrada" });
       return;
     }
 
@@ -293,7 +293,7 @@ router.delete("/friends/:id", requireAuth, async (req, res): Promise<void> => {
 
   const parsedParams = RemoveFriendParams.safeParse(req.params);
   if (!parsedParams.success) {
-    res.status(400).json({ error: parsedParams.error.message });
+    res.status(200).json({ success: false, error: parsedParams.error.message });
     return;
   }
 
@@ -307,7 +307,7 @@ router.delete("/friends/:id", requireAuth, async (req, res): Promise<void> => {
       .limit(1);
 
     if (!friendship) {
-      res.status(404).json({ error: "Amizade não encontrada" });
+      res.status(200).json({ success: false, error: "Amizade não encontrada" });
       return;
     }
 

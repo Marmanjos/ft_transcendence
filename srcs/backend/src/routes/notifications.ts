@@ -27,7 +27,7 @@ router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
 router.post("/notifications/:id/read", requireAuth, async (req, res): Promise<void> => {
   const userId = req.user!.userId;
   const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+  if (isNaN(id)) { res.status(200).json({ success: false, error: "ID inválido" }); return; }
   try {
     await markAsRead(id, userId);
     res.status(204).end();

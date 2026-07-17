@@ -144,12 +144,21 @@ export default function GroupDetail({ id }: GroupDetailProps) {
           inviteOnly
         }),
       });
+      
       const data = await response.json();
+      
+      // Interceta o erro 200 controlado do backend (ex: nome do clã já existe)
+      if (data && data.success === false) {
+        throw new Error(data.error || "Falha ao atualizar grupo");
+      }
+      
+      // Se response.ok for falso por falhas críticas (ex: status 500)
       if (!response.ok) {
         throw new Error(data.error || "Falha ao atualizar grupo");
       }
+
       await loadGroup();
-      toast({ title: "Grupo atualizado" });
+      toast({ title: "Grupo updated", description: "Grupo atualizado com sucesso." });
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -167,12 +176,18 @@ export default function GroupDetail({ id }: GroupDetailProps) {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error("Falha ao apagar grupo");
+      
+      // Como a rota DELETE remove o item, se o backend retornar JSON no sucesso/erro, validamos aqui
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Falha ao apagar grupo");
+      }
+      
       setLocation("/groups");
-    } catch {
+    } catch (error: any) {
       toast({
         title: "Erro",
-        description: "Não foi possível apagar o grupo.",
+        description: error.message || "Não foi possível apagar o grupo.",
         variant: "destructive",
       });
     }
@@ -192,10 +207,18 @@ export default function GroupDetail({ id }: GroupDetailProps) {
         },
         body: JSON.stringify({ username: username.trim(), role: "MEMBER" }),
       });
+      
       const data = await response.json();
+      
+      // Interceta o erro 200 controlado do backend (ex: usuário convidado não existe)
+      if (data && data.success === false) {
+        throw new Error(data.error || "Falha ao adicionar membro");
+      }
+
       if (!response.ok) {
         throw new Error(data.error || "Falha ao adicionar membro");
       }
+
       await loadGroup();
       toast({ title: "Convite enviado", description: `Convite enviado para ${username.trim()}` });
     } catch (error: any) {
@@ -222,10 +245,18 @@ export default function GroupDetail({ id }: GroupDetailProps) {
         },
         body: JSON.stringify({ role: newRole }),
       });
+      
       const data = await response.json();
+      
+      // Interceta o erro 200 controlado (ex: permissões insuficientes)
+      if (data && data.success === false) {
+        throw new Error(data.error || "Falha ao alterar cargo");
+      }
+
       if (!response.ok) {
         throw new Error(data.error || "Falha ao alterar cargo");
       }
+
       await loadGroup();
       toast({ title: "Cargo atualizado", description: `${member.username} agora é ${newRole}.` });
     } catch (error: any) {

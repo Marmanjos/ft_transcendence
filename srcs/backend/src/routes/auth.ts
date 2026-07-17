@@ -10,7 +10,7 @@ const router: IRouter = Router();
 router.post("/auth/register", async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(200).json({ success: false, error: parsed.error.message });
     return;
   }
   const { username, email, password } = parsed.data;
@@ -22,7 +22,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     .limit(1);
 
   if (existingUser) {
-    res.status(409).json({ error: "Email já está em uso" });
+    res.status(200).json({ success: false, error: "Email já está em uso" });
     return;
   }
 
@@ -33,7 +33,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     .limit(1);
 
   if (existingUsername) {
-    res.status(409).json({ error: "Nome de usuário já está em uso" });
+    res.status(200).json({ success: false, error: "Nome de usuário já está em uso" });
     return;
   }
 
@@ -61,7 +61,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 router.post("/auth/login", async (req, res): Promise<void> => {
   const parsed = LoginBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(200).json({ success: false, error: parsed.error.message });
     return;
   }
   const { email, password } = parsed.data;
