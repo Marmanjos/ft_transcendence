@@ -124,69 +124,102 @@ export default function Profile({ id }: { id: number }) {
     setLocation("/room");
   };
 
-  const handleSave = async () => {
-    try {
-      const response = await updateUser.mutateAsync({
-        id: user.id,
-        data: {
-          username: username.trim(),
+ const handleSave = async () => {
+  // --- VALIDAÇÃO LOCAL ---
+  const trimmed = username.trim();
+  if (trimmed.length < 3) {
+    toast({
+      title: "Erro ao atualizar perfil",
+      description: "O username deve ter pelo menos 3 caracteres (espaços não contam).",
+      variant: "destructive",
+    });
+    return;
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+    toast({
+      title: "Erro ao atualizar perfil",
+      description: "O username pode conter apenas letras, números e sublinhado (_).",
+      variant: "destructive",
+    });
+    return;
+  }
+  // (opcional) rejeitar se for apenas números?
+  // ...
+
+  try {
+    // Envia o username já trimado
+    await updateUser.mutateAsync({
+      id: user.id,
+      data: {
+        username: trimmed,
+      },
+    });
+
+    // --- Upload do avatar (se houver) ---
+    if (avatarFile) {
+      const formData = new FormData();
+      formData.append("avatar", avatarFile);
+
+      const response = await fetch("/api/users/me/avatar", {
+        method: "POST",
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("elemental_duel_token")}`,
         },
       });
 
-      if (response && (response as any).success === false) {
-        toast({
-          title: "Erro ao atualizar perfil",
-          description: (response as any).error || "Algo correu mal.",
-          variant: "destructive",
-        });
-        return;
+      if (!response.ok) {
+        // Lança erro para ser capturado pelo catch abaixo
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || "Falha no upload do avatar");
       }
-
-      if (avatarFile) {
-        const formData = new FormData();
-        formData.append("avatar", avatarFile);
-
-        const avatarRes = await fetch("/api/users/me/avatar", {
-          method: "POST",
-          body: formData,
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("elemental_duel_token")}`,
-          },
-        });
-
-        if (!avatarRes.ok) {
-          const errorData = await avatarRes.json().catch(() => ({}));
-          throw new Error(errorData.error || "Falha no upload do avatar");
-        }
-
-        queryClient.invalidateQueries({
-          queryKey: ["/api/auth/me"],
-        });
-      }
-
-      queryClient.invalidateQueries({
-        queryKey: ["/api/users", user.id],
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: ["/api/users", user.id, "stats"],
-      });
-
-      toast({
-        title: "Perfil atualizado",
-        description: "Username alterado com sucesso.",
-      });
-
-      setIsEditOpen(false);
-      resetAvatarState();
-    } catch (error: any) {
-      toast({
-        title: "Erro ao atualizar perfil",
-        description: error.message || "Algo correu mal.",
-        variant: "destructive",
-      });
     }
-  };
+
+    // Invalidar queries
+    queryClient.invalidateQueries({
+      queryKey: ["/api/users", user.id],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["/api/auth/me"],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["/api/users", user.id, "stats"],
+    });
+
+    toast({
+      title: "Perfil atualizado",
+      description: "Username alterado com sucesso.",
+    });
+
+    setIsEditOpen(false);
+    resetAvatarState();
+  } catch (error: any) {
+    let description = "Algo correu mal.";
+
+    // Extrai a mensagem de erro da resposta da API
+    if (error.response?.data) {
+      const data = error.response.data;
+
+      if (Array.isArray(data)) {
+        description = data.map((e: any) => e.message).join(", ");
+      } else if (data.error) {
+        description = data.error;
+      } else if (data.message) {
+        description = data.message;
+      } else if (typeof data === "string") {
+        description = data;
+      }
+    } else if (error instanceof Error) {
+      description = error.message;
+    }
+
+    toast({
+      title: "Erro ao atualizar perfil",
+      description,
+      variant: "destructive",
+    });
+  }
+};
 
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
