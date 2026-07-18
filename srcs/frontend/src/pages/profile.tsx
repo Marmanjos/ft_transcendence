@@ -277,6 +277,7 @@ const handleSave = async () => {
   }
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      {/* CARD DE PERFIL */}
       <div className="flex flex-col md:flex-row items-center gap-8 bg-card/50 border border-primary/20 p-8 rounded-xl backdrop-blur relative overflow-hidden">
         <div className="relative w-32 h-32">
           <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase neon-box">
@@ -297,7 +298,7 @@ const handleSave = async () => {
             {isOwnProfile && (
               <button onClick={() => {setUsername(user.username);
                 setIsEditOpen(true)
-                }}>  
+                }} className="ml-2 inline-block align-middle text-primary hover:text-white transition-colors">  
                 <Edit className="w-4 h-4" />
               </button>
             )}
@@ -344,10 +345,63 @@ const handleSave = async () => {
 
         </div>
       </div>
+
+      {/* --- NOVA SECÇÃO: CONQUISTAS E NÍVEL (ACIMA DAS ESTATÍSTICAS) --- */}
+      <Card className="bg-card/30 border-primary/20 backdrop-blur">
+        <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="text-center sm:text-left">
+            <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Nível de Combate</p>
+            <div className="flex items-baseline justify-center sm:justify-start gap-1">
+              <span className="text-5xl font-black text-primary neon-text">LVL</span>
+              <span className="text-6xl font-black text-white">{(stats as any)?.level || 1}</span>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full border-t sm:border-t-0 sm:border-l border-primary/10 pt-4 sm:pt-0 sm:pl-6">
+            <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-3 text-center sm:text-left">
+              Emblemas de Prestígio
+            </p>
+            
+            {/* Lista Horizontal de Medalhas */}
+            <div className="flex flex-wrap justify-center sm:justify-start gap-4">
+              {(stats as any)?.badges && (stats as any).badges.length > 0 ? (
+                (stats as any).badges.map((badge: any) => (
+                  <div 
+                    key={badge.id} 
+                    className="group relative flex flex-col items-center bg-background/60 border border-primary/30 p-3 rounded-xl w-24 text-center transition-all hover:border-primary hover:scale-105"
+                    title={`${badge.name}: ${badge.description}`}
+                  >
+                    <img 
+                      src={badge.iconUrl} 
+                      alt={badge.name} 
+                      className="w-12 h-12 object-contain mb-1 drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" 
+                      onError={(e) => {
+                        // Fallback caso a imagem local do container ainda não exista
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                    <span className="text-[10px] font-bold font-mono text-white truncate w-full uppercase">
+                      {badge.name}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider py-2">
+                  [ Nenhum emblema desbloqueado na arena ]
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      {/* ---------------------------------------------------------------- */}
+
+      {/* TÍTULO COMBATE */}
       <div className="flex items-center justify-center w-full">
-        <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border pb-2 mt-12">Estatísticas de Combate</h2>
+        <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border pb-2 mt-4">Estatísticas de Combate</h2>
       </div>
       
+      {/* CARDS DE STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-card/50 border-primary/30 text-center py-6">
           <p className="text-sm font-mono text-muted-foreground uppercase mb-2">Partidas</p>
@@ -396,38 +450,40 @@ const handleSave = async () => {
         </Card>
       </div>
 
+      {/* MODAL EDIT PROFILE */}
       {isEditOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center">
-          <div className="bg-card p-6 rounded-xl w-[400px] space-y-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-card p-6 rounded-xl w-[400px] space-y-4 border border-primary/30 backdrop-blur">
 
               <div className="flex items-center justify-center w-full">
-                <h2 className="text-xl font-bold">Editar perfil</h2>
+                <h2 className="text-xl font-bold uppercase tracking-wider text-white">Editar perfil</h2>
               </div>
 
               <div className="flex items-center justify-center w-full">
-                <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase">
-                  <button onClick={() => document.getElementById("avatar-upload")?.click()}>
+                <div className="w-32 h-32 rounded-full bg-background border-4 border-primary flex items-center justify-center text-5xl font-black text-primary uppercase relative group cursor-pointer overflow-hidden">
+                  <button onClick={() => document.getElementById("avatar-upload")?.click()} className="w-full h-full flex items-center justify-center">
                     {avatarPreview ? (
                       <img src={avatarPreview} className="w-32 h-32 rounded-full object-cover"/>
-                    ) : (<Upload className="w-26 h-26" />)}
+                    ) : user.avatarUrl ? (
+                      <img src={user.avatarUrl} className="w-32 h-32 rounded-full object-cover"/>
+                    ) : (<Upload className="w-8 h-8" />)}
                   </button>
 
                   <input type="file" accept="image/*" className="hidden" id="avatar-upload" onChange={onFileChange}/>
                 </div>
               </div>
 
-            <input className="w-full p-2 rounded bg-background border" value={username}
+            <input className="w-full p-2 rounded bg-background border border-primary/20 text-white font-mono" value={username}
               onChange={(e) => setUsername(e.target.value)}/>
 
-            <div className="flex justify-end gap-2">
-              <button onClick={() => {
-                resetAvatarState(); setIsEditOpen(false); }}>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button onClick={() => { resetAvatarState(); setIsEditOpen(false); }} variant="outline" className="font-mono uppercase text-xs">
                 Cancelar
-              </button>
+              </Button>
 
-              <button onClick={handleSave}>
+              <Button onClick={handleSave} className="font-mono uppercase text-xs neon-box">
                 Guardar
-              </button>
+              </Button>
             </div>
 
           </div>
