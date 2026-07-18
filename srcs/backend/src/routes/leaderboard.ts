@@ -9,6 +9,7 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
   const query = GetLeaderboardQueryParams.safeParse(req.query);
   const limit = query.success ? (query.data.limit ?? 10) : 10;
 
+  // Busca os utilizadores sequencialmente da DB
   const users = await db
     .select({
       id: usersTable.id,
@@ -53,9 +54,18 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
     })
   );
 
+  // --- NOVA LÓGICA DE ORDENAÇÃO CORRIGIDA ---
   const sorted = leaderboardData
     .filter(u => u.totalMatches > 0)
-    .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)
+    .sort((a, b) => {
+      // 1º Critério: Maior número de vitórias descrescente (b - a)
+      if (b.wins !== a.wins) {
+        return b.wins - a.wins;
+      }
+      // 2º Critério (Desempate): Quem chegou primeiro mantém o topo.
+      // IDs menores indicam registos mais antigos. (a - b)
+      return a.userId - b.userId;
+    })
     .slice(0, limit)
     .map((entry, idx) => ({ rank: idx + 1, ...entry }));
 
