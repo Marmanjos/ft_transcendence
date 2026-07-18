@@ -89,6 +89,22 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // --- NOVA VERIFICAÇÃO DE USERNAME DUPLICADO ---
+  if (parsed.data.username) {
+    const [existingUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.username, parsed.data.username))
+      .limit(1);
+
+    // Se encontrou alguém com esse username e NÃO é o próprio usuário atual
+    if (existingUser && existingUser.id !== params.data.id) {
+      res.status(200).json({ success: false, error: "Este username já está em uso." });
+      return;
+    }
+  }
+  // ----------------------------------------------
+
   const [user] = await db
     .update(usersTable)
     .set(parsed.data)

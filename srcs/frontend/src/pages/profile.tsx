@@ -123,8 +123,7 @@ export default function Profile({ id }: { id: number }) {
     });
     setLocation("/room");
   };
-
- const handleSave = async () => {
+const handleSave = async () => {
   // --- VALIDAÇÃO LOCAL ---
   const trimmed = username.trim();
   if (trimmed.length < 3) {
@@ -143,17 +142,21 @@ export default function Profile({ id }: { id: number }) {
     });
     return;
   }
-  // (opcional) rejeitar se for apenas números?
-  // ...
 
   try {
-    // Envia o username já trimado
-    await updateUser.mutateAsync({
+    // 1. Envia o username e captura o retorno da mutação
+    const res = await updateUser.mutateAsync({
       id: user.id,
       data: {
         username: trimmed,
       },
     });
+
+    // --- VALIDAÇÃO DE SUCESSO DA API (Status 200 com erro lógico) ---
+    // Se o backend respondeu 200 mas mandou success: false, forçamos a ida para o catch
+    if (res && res.success === false) {
+      throw new Error(res.error || "Este username já está em uso.");
+    }
 
     // --- Upload do avatar (se houver) ---
     if (avatarFile) {
@@ -169,26 +172,19 @@ export default function Profile({ id }: { id: number }) {
       });
 
       if (!response.ok) {
-        // Lança erro para ser capturado pelo catch abaixo
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || errorData.message || "Falha no upload do avatar");
       }
     }
 
     // Invalidar queries
-    queryClient.invalidateQueries({
-      queryKey: ["/api/users", user.id],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["/api/auth/me"],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["/api/users", user.id, "stats"],
-    });
+    queryClient.invalidateQueries({ queryKey: ["/api/users", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users", user.id, "stats"] });
 
     toast({
       title: "Perfil atualizado",
-      description: "Username alterado com sucesso.",
+      description: "Perfil atualizado com sucesso.",
     });
 
     setIsEditOpen(false);
@@ -196,10 +192,9 @@ export default function Profile({ id }: { id: number }) {
   } catch (error: any) {
     let description = "Algo correu mal.";
 
-    // Extrai a mensagem de erro da resposta da API
+    // Extrai a mensagem de erro da resposta da API (caso use axios ou similar para erros reais)
     if (error.response?.data) {
       const data = error.response.data;
-
       if (Array.isArray(data)) {
         description = data.map((e: any) => e.message).join(", ");
       } else if (data.error) {
@@ -209,7 +204,9 @@ export default function Profile({ id }: { id: number }) {
       } else if (typeof data === "string") {
         description = data;
       }
-    } else if (error instanceof Error) {
+    } 
+    // Captura o erro manual lançado pelo 'throw new Error' ali de cima
+    else if (error instanceof Error) {
       description = error.message;
     }
 
@@ -220,8 +217,6 @@ export default function Profile({ id }: { id: number }) {
     });
   }
 };
-
-
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
