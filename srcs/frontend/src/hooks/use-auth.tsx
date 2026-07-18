@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: user, isLoading: isUserLoading } = useGetMe({
+  const { data: user, isLoading: isUserLoading, isError } = useGetMe({
     query: {
       queryKey: ["/api/auth/me"],
       enabled: !!token,
@@ -44,22 +44,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
+  // Handle token expiration/invalidation from the backend
+  useEffect(() => {
+    if (isError && token) {
+      localStorage.removeItem(TOKEN_KEY);
+      setToken(null);
+      queryClient.clear();
+      setLocation("/login");
+    }
+  }, [isError, token, queryClient, setLocation]);
+
   const login = async (data: LoginInput) => {
     try {
       // 1. Executa a mutação de forma limpa
       const response = await loginMutation.mutateAsync({ data });
-
-      // 2. Verifica se o backend respondeu com erro controlado (200 success: false)
-      if (response && (response as any).success === false) {
-        toast({
-          title: "Erro no Login",
-          description: (response as any).error || "Credenciais inválidas.",
-          variant: "destructive"
-        });
-        return; // Trava o fluxo para não salvar tokens inválidos
+      if ((response as any).error) {
+        throw new Error((response as any).error);
       }
-
-      // 3. Se correu bem, guarda o token e segue o fluxo
+      // Synchronously set token in localStorage before updating state and navigating
+      // to ensure subsequent requests can access the token immediately.
+      localStorage.setItem(TOKEN_KEY, response.token);
       setToken(response.token);
       localStorage.setItem(TOKEN_KEY, response.token);
       queryClient.setQueryData(["/api/auth/me"], response.user);
@@ -69,13 +73,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "Bem-vindo à arena.",
       });
       setLocation("/lobby");
-    } catch (error) {
+    } catch (error: any) {
+      // Clear any existing token on failed login attempts
+      localStorage.removeItem(TOKEN_KEY);
+      setToken(null);
+      queryClient.clear();
+      const description = error?.data?.error || error?.message || "Credenciais inválidas.";
       toast({
         title: "Acesso Negado",
-        description: "Credenciais inválidas.",
+        description,
         variant: "destructive",
       });
-      throw error;
+      throw error; // Re‑throw to propagate error after cleanup
     }
   };
 
@@ -83,18 +92,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // 1. Executa a mutação de forma limpa
       const response = await registerMutation.mutateAsync({ data });
-
-      // 2. Interceta o erro 200 controlado do backend (ex: email ou username já em uso)
-      if (response && (response as any).success === false) {
-        toast({ 
-          title: "Erro", 
-          description: (response as any).error || "Ocorreu um erro.", 
-          variant: "destructive" 
-        }); 
-        return; 
+      if ((response as any).error) {
+        throw new Error((response as any).error);
       }
-
-      // 3. Fluxo de sucesso real se passar na validação do backend
+      // Synchronously set token in localStorage before updating state and navigating
+      localStorage.setItem(TOKEN_KEY, response.token);
       setToken(response.token);
       localStorage.setItem(TOKEN_KEY, response.token);
       queryClient.setQueryData(["/api/auth/me"], response.user);
@@ -104,10 +106,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "Sua jornada começa agora.",
       });
       setLocation("/lobby");
-    } catch (error) {
+    } catch (error: any) {
+      const description = error?.data?.error || error?.message || "Não foi possível criar sua conta.";
       toast({
         title: "Erro no Registro",
-        description: "Não foi possível criar sua conta.",
+        description,
         variant: "destructive",
       });
       throw error;
@@ -121,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       // Ignore network failures on logout
     } finally {
+      localStorage.removeItem(TOKEN_KEY);
       setToken(null);
       queryClient.clear();
       setLocation("/");
