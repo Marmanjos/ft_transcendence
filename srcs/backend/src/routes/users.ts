@@ -10,6 +10,24 @@ import path from "path";
 
 const router: IRouter = Router();
 
+// --- SISTEMA DE CONQUISTAS (EMBLEMAS ESTÁTICOS) ---
+interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  levelRequired: number;
+  iconUrl: string;
+}
+
+const STATIC_BADGES: Badge[] = [
+  { id: "bronze", name: "Recruta da Arena", description: "Alcançou o Nível 4", levelRequired: 4, iconUrl: "/assets/badges/level_4.png" },
+  { id: "silver", name: "Guerreiro Elemental", description: "Alcançou o Nível 8", levelRequired: 8, iconUrl: "/assets/badges/level_8.png" },
+  { id: "gold", name: "Mestre dos Elementos", description: "Alcançou o Nível 12", levelRequired: 12, iconUrl: "/assets/badges/level_12.png" },
+  { id: "platinum", name: "Lenda de Marte", description: "Alcançou o Nível 16", levelRequired: 16, iconUrl: "/assets/badges/level_16.png" },
+  { id: "titan", name: "Titã Invicto", description: "Alcançou o Nível 20", levelRequired: 20, iconUrl: "/assets/badges/level_20.png" },
+];
+// --------------------------------------------------
+
 // 1. ONLINE STATUS
 router.get("/users/online-status", requireAuth, async (req, res): Promise<void> => {
   const raw = typeof req.query.ids === "string" ? req.query.ids : "";
@@ -44,13 +62,11 @@ router.get("/users/:id", async (req, res): Promise<void> => {
 
   let finalAvatarUrl = user.avatarUrl ?? null;
 
-  // Garante a existência física do ficheiro no disco do Container
   if (finalAvatarUrl) {
     const filename = finalAvatarUrl.replace("/uploads/", "");
     const filePath = path.join(process.cwd(), "uploads", filename);
 
     if (!fs.existsSync(filePath)) {
-      // Correção imediata em background para limpar a DB de forma assíncrona
       db.update(usersTable)
         .set({ avatarUrl: null })
         .where(eq(usersTable.id, user.id))
@@ -89,7 +105,6 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // --- NOVA VERIFICAÇÃO DE USERNAME DUPLICADO ---
   if (parsed.data.username) {
     const [existingUser] = await db
       .select()
@@ -97,13 +112,11 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
       .where(eq(usersTable.username, parsed.data.username))
       .limit(1);
 
-    // Se encontrou alguém com esse username e NÃO é o próprio usuário atual
     if (existingUser && existingUser.id !== params.data.id) {
       res.status(200).json({ success: false, error: "Este username já está em uso." });
       return;
     }
   }
-  // ----------------------------------------------
 
   const [user] = await db
     .update(usersTable)
@@ -140,7 +153,6 @@ router.post("/users/me/avatar", requireAuth, upload.single("avatar"), async (req
       .where(eq(usersTable.id, userId))
       .limit(1);
 
-    // Apaga de forma resiliente usando o caminho de trabalho atual do Docker
     if (currentUser && currentUser.avatarUrl) {
       const oldFilename = currentUser.avatarUrl.replace("/uploads/", "");
       const oldFilePath = path.join(process.cwd(), "uploads", oldFilename);
@@ -168,7 +180,7 @@ router.post("/users/me/avatar", requireAuth, upload.single("avatar"), async (req
   }
 );
 
-// 5. USER STATS
+// 5. USER STATS (Atualizado com Nível e Medalhas Dinâmicas)
 router.get("/users/:id/stats", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const userId = parseInt(raw, 10);
@@ -202,6 +214,13 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
   const totalMatches = completedMatches.length;
   const winRate = totalMatches > 0 ? wins / totalMatches : 0;
 
+const temporaryXP = (wins * 100) + (draws * 30);
+const userLevel = Math.max(1, Math.floor(temporaryXP / 1000) + 1);
+
+  // Filtragem dinâmica de conquistas com base no nível calculado
+  const unlockedBadges = STATIC_BADGES.filter(badge => userLevel >= badge.levelRequired);
+  // -----------------------------------------
+
   const rounds = await db
     .select({ player1Choice: roundsTable.player1Choice, matchId: roundsTable.matchId })
     .from(roundsTable)
@@ -230,6 +249,8 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
     totalMatches,
     winRate,
     favoriteElemental,
+    level: userLevel,       // Injetado dinamicamente
+    badges: unlockedBadges, // Injetado dinamicamente
   });
 });
 
