@@ -72,14 +72,8 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .where(eq(usersTable.email, email))
     .limit(1);
 
-  if (!user) {
-    res.status(401).json({ error: "Credenciais inválidas" });
-    return;
-  }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    res.status(401).json({ error: "Credenciais inválidas" });
+  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    res.status(200).json({ success: false, error: "Credenciais inválidas" });
     return;
   }
 
