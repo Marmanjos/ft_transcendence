@@ -250,12 +250,12 @@ export default function Game3v3Arena() {
     // 3. Tenta enviar ABANDON_MATCH (se possível)
     if (match && matchId) {
       try {
-        send({ 
-          type: "ABANDON_MATCH", 
-          matchId: Number(matchId) 
+        send({
+          type: "ABANDON_MATCH",
+          matchId: Number(matchId)
         });
-      } catch (error) {
-        console.warn("Não foi possível enviar ABANDON_MATCH:", error);
+      } catch {
+        // WebSocket may not be ready, error is handled
       }
     }
     

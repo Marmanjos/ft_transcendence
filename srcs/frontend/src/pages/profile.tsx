@@ -71,7 +71,8 @@ export default function Profile({ id }: { id: number }) {
       toast({ title: "Solicitação enviada", description: "Convite de amizade enviado!" });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
     } catch (err: any) {
-      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
+      const errorMessage = err?.response?.data?.error || "Não foi possível enviar solicitação.";
+      toast({ title: "Erro", description: errorMessage, variant: "destructive" });
     }
   };
 
@@ -90,8 +91,9 @@ export default function Profile({ id }: { id: number }) {
 
       toast({ title: "Amizade aceita", description: "Agora vocês são amigos!" });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
-    } catch (err) {
-      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.error || "Não foi possível aceitar a solicitação.";
+      toast({ title: "Erro", description: errorMessage, variant: "destructive" });
     }
   };
 
@@ -110,8 +112,9 @@ export default function Profile({ id }: { id: number }) {
 
       toast({ title: isRequest ? "Solicitação removida" : "Amigo removido", description: isRequest ? "A solicitação foi cancelada/rejeitada." : "Usuário removido da lista de amigos." });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
-    } catch (err) {
-      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.error || "Não foi possível concluir a ação.";
+      toast({ title: "Erro", description: errorMessage, variant: "destructive" });
     }
   };
 
@@ -175,6 +178,28 @@ const handleSave = async () => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || errorData.message || "Falha no upload do avatar");
       }
+      queryClient.invalidateQueries({
+        queryKey: ["/api/users", user.id],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["/api/users", user.id, "stats"],
+      });
+
+      toast({
+        title: "Perfil atualizado",
+        description: "Username alterado com sucesso.",
+      });
+
+      setIsEditOpen(false);
+      resetAvatarState();
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.error || error?.message || "Algo correu mal.";
+      toast({
+        title: "Erro ao atualizar perfil",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
 
     // Invalidar queries
