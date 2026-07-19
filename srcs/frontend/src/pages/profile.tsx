@@ -178,42 +178,28 @@ const handleSave = async () => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || errorData.message || "Falha no upload do avatar");
       }
-      queryClient.invalidateQueries({
-        queryKey: ["/api/users", user.id],
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: ["/api/users", user.id, "stats"],
-      });
-
-      toast({
-        title: "Perfil atualizado",
-        description: "Username alterado com sucesso.",
-      });
-
-      setIsEditOpen(false);
-      resetAvatarState();
-    } catch (error: any) {
-      const errorMessage = error?.response?.data?.error || error?.message || "Algo correu mal.";
-      toast({
-        title: "Erro ao atualizar perfil",
-        description: errorMessage,
-        variant: "destructive",
-      });
     }
+
+    queryClient.invalidateQueries({
+      queryKey: ["/api/users", user.id],
+    });
+
+    queryClient.invalidateQueries({
+      queryKey: ["/api/users", user.id, "stats"],
+    });
+
+    toast({
+      title: "Perfil atualizado",
+      description: "Username alterado com sucesso.",
+    });
+
+    setIsEditOpen(false);
+    resetAvatarState();
 
     // Invalidar queries
     queryClient.invalidateQueries({ queryKey: ["/api/users", user.id] });
     queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     queryClient.invalidateQueries({ queryKey: ["/api/users", user.id, "stats"] });
-
-    toast({
-      title: "Perfil atualizado",
-      description: "Perfil atualizado com sucesso.",
-    });
-
-    setIsEditOpen(false);
-    resetAvatarState();
   } catch (error: any) {
     let description = "Algo correu mal.";
 
@@ -229,7 +215,7 @@ const handleSave = async () => {
       } else if (typeof data === "string") {
         description = data;
       }
-    } 
+    }
     // Captura o erro manual lançado pelo 'throw new Error' ali de cima
     else if (error instanceof Error) {
       description = error.message;
