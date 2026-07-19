@@ -216,6 +216,10 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
 
 const temporaryXP = (wins * 100) + (draws * 30);
 const userLevel = Math.max(1, Math.floor(temporaryXP / 1000) + 1);
+const xpForCurrentLevel = (userLevel - 1) * 1000;
+const xpForNextLevel = userLevel * 1000;
+const currentLevelXP = temporaryXP - xpForCurrentLevel;
+const xpNeededForNextLevel = xpForNextLevel - xpForCurrentLevel;
 
   // Filtragem dinâmica de conquistas com base no nível calculado
   const unlockedBadges = STATIC_BADGES.filter(badge => userLevel >= badge.levelRequired);
@@ -249,8 +253,11 @@ const userLevel = Math.max(1, Math.floor(temporaryXP / 1000) + 1);
     totalMatches,
     winRate,
     favoriteElemental,
-    level: userLevel,       // Injetado dinamicamente
-    badges: unlockedBadges, // Injetado dinamicamente
+    level: userLevel,
+    badges: unlockedBadges,
+    totalXP: temporaryXP,
+    currentLevelXP,
+    xpNeededForNextLevel,
   });
 });
 
