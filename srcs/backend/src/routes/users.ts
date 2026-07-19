@@ -197,9 +197,13 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
     );
 
   let wins = 0, losses = 0, draws = 0;
+  let multiplayerWins = 0;
   for (const match of completedMatches) {
     if (match.winnerId === userId) {
       wins++;
+      if (match.mode === "MULTIPLAYER") {
+        multiplayerWins++;
+      }
     } else if (match.winnerId !== null) {
       losses++;
     } else {
@@ -214,7 +218,8 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
   const totalMatches = completedMatches.length;
   const winRate = totalMatches > 0 ? wins / totalMatches : 0;
 
-const temporaryXP = (wins * 100) + (draws * 30);
+const singleplayerWins = wins - multiplayerWins;
+const temporaryXP = (singleplayerWins * 100) + (multiplayerWins * 150) + (draws * 30);
 const userLevel = Math.max(1, Math.floor(temporaryXP / 1000) + 1);
 const xpForCurrentLevel = (userLevel - 1) * 1000;
 const xpForNextLevel = userLevel * 1000;

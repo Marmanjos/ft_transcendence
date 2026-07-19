@@ -848,7 +848,34 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
       const isMatchOver = matchRoom.roundNumber > 3;
 
       if (isMatchOver) {
+        // Save 3v3 match results to database for each player
         for (const p of matchRoom.players) {
+          const playerScore = matchRoom.scores[p.userId];
+          const otherScores = matchRoom.players
+            .filter(op => op.userId !== p.userId)
+            .map(op => matchRoom.scores[op.userId]);
+
+          const playerWon = otherScores.every(score => playerScore > score);
+          const playerDrew = otherScores.some(score => playerScore === score);
+
+          const winnerId = playerWon ? p.userId : playerDrew ? null : null;
+
+          try {
+            await db.insert(matchesTable).values({
+              player1Id: p.userId,
+              player2Id: null,
+              mode: "MULTIPLAYER",
+              status: "COMPLETED",
+              winnerId,
+              player1Score: playerScore,
+              player2Score: Math.max(...otherScores),
+              aiDifficulty: "MEDIUM",
+              completedAt: new Date(),
+            }).catch((err: unknown) => logger.error({ err, userId: p.userId, matchId }, "Failed to save 3v3 match"));
+          } catch (err) {
+            logger.error({ err, userId: p.userId, matchId }, "Error inserting 3v3 match");
+          }
+
           sendToUser(p.userId, {
             type: "MATCH_3V3_ROUND_RESULT",
             roundNumber,
