@@ -860,6 +860,11 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
 
           const winnerId = playerWon ? p.userId : playerDrew ? null : null;
 
+          // XP based on actual score: max(0, 75 + score * 25)
+          // Score range: -6 to +6
+          // Score +6: 225 XP | Score +3: 150 XP | Score 0: 75 XP | Score -3: 0 XP
+          const xpEarned = Math.max(0, 75 + playerScore * 25);
+
           try {
             await db.insert(matchesTable).values({
               player1Id: p.userId,
@@ -870,8 +875,11 @@ async function handleSubmitChoice(player: ConnectedPlayer, matchId: number, elem
               player1Score: playerScore,
               player2Score: Math.max(...otherScores),
               aiDifficulty: "MEDIUM",
+              createdAt: new Date(),
               completedAt: new Date(),
-            }).catch((err: unknown) => logger.error({ err, userId: p.userId, matchId }, "Failed to save 3v3 match"));
+            }).catch((err: unknown) => {
+              logger.error({ err, userId: p.userId, matchId, xpEarned }, "Failed to save 3v3 match");
+            });
           } catch (err) {
             logger.error({ err, userId: p.userId, matchId }, "Error inserting 3v3 match");
           }
