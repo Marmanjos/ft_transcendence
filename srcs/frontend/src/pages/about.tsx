@@ -1,12 +1,14 @@
+// ft_finish/srcs/frontend/src/pages/about.tsx
+
 import React from "react";
 
 export default function About() {
   const badges = [
-    { lvl: 4, name: "Recruta da Arena", desc: "Concedido aos jogadores que dominaram o básico do combate e começaram a sua jornada." },
-    { lvl: 8, name: "Guerreiro Elemental", desc: "Concedido aos jogadores que demonstraram consistência e domínio das mecânicas elementais." },
-    { lvl: 12, name: "Mestre dos Elementos", desc: "Reservado para jogadores experientes com grande histórico de combates vencidos." },
-    { lvl: 16, name: "Lenda de Marte", desc: "Conquista de elite para lutadores veteranos da arena." },
-    { lvl: 20, name: "Titã Invicto", desc: "O patamar máximo de prestígio, alcançado apenas pelos combatentes mais dedicados." },
+    { lvl: 4, name: "Arena Recruit", desc: "Awarded to players who have mastered the basics of combat and begun their journey." },
+    { lvl: 8, name: "Elemental Warrior", desc: "Awarded to players demonstrating consistency and mastery over elemental mechanics." },
+    { lvl: 12, name: "Element Master", desc: "Reserved for experienced combatants with an extensive history of victories." },
+    { lvl: 16, name: "Mars Legend", desc: "Elite milestone achievement for veteran fighters of the arena." },
+    { lvl: 20, name: "Undefeated Titan", desc: "The highest prestige tier, reached only by the most dedicated operators." },
   ];
 
   return (
@@ -25,7 +27,7 @@ export default function About() {
         <section className="space-y-3">
           <h2 className="text-xl font-bold uppercase tracking-wider text-cyan-300 border-b border-cyan-500/20 pb-1">// 01. PROJECT TRANSMISSION</h2>
           <p className="text-cyan-400/80 text-sm leading-relaxed text-justify">
-            <span className="text-cyan-300 font-bold">Elemental Duel</span> é uma aplicação web full-stack de alto desempenho que combina um jogo de duelo tático em tempo real com uma infraestrutura social robusta. O sistema integra persistência de dados relacional complexa e sincronização por pacotes via WebSockets, oferecendo matchmaking 1v1 dinâmico e simulações single-player contra uma IA adaptativa.
+            <span className="text-cyan-300 font-bold">Elemental Duel</span> is a high-performance full-stack web application that combines a real-time tactical dueling game with a robust social infrastructure. The system integrates complex relational data persistence and packet synchronization via WebSockets, delivering dynamic 1v1 matchmaking alongside single-player simulations driven by an adaptive AI.
           </p>
         </section>
 
@@ -33,17 +35,17 @@ export default function About() {
         <section className="space-y-4">
           <h2 className="text-xl font-bold uppercase tracking-wider text-cyan-300 border-b border-cyan-500/20 pb-1">// 02. GAMEPLAY METHODOLOGY</h2>
           <p className="text-cyan-400/80 text-sm">
-            Os confrontos operam num sistema de triangulação elemental cíclico e intuitivo. A eficácia operacional de cada comando é absoluta:
+            Engagements operate on a cyclic and intuitive elemental triangulation system. The operational efficiency of each command is absolute:
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center text-xs tracking-widest uppercase pt-2">
             <div className="border border-red-500/40 bg-red-950/10 p-3 rounded shadow-[0_0_10px_rgba(239,68,68,0.1)]">
-              <span className="font-bold text-red-400">TITAN</span> <br /> <span className="text-cyan-500/60">neutraliza</span> <br /> <span className="font-bold text-yellow-400">RAZOR</span>
+              <span className="font-bold text-red-400">TITAN</span> <br /> <span className="text-cyan-500/60">neutralizes</span> <br /> <span className="font-bold text-yellow-400">RAZOR</span>
             </div>
             <div className="border border-yellow-500/40 bg-yellow-950/10 p-3 rounded shadow-[0_0_10px_rgba(234,179,8,0.1)]">
-              <span className="font-bold text-yellow-400">RAZOR</span> <br /> <span className="text-cyan-500/60">neutraliza</span> <br /> <span className="font-bold text-purple-400">WRAITH</span>
+              <span className="font-bold text-yellow-400">RAZOR</span> <br /> <span className="text-cyan-500/60">neutralizes</span> <br /> <span className="font-bold text-purple-400">WRAITH</span>
             </div>
             <div className="border border-purple-500/40 bg-purple-950/10 p-3 rounded shadow-[0_0_10px_rgba(168,85,247,0.1)]">
-              <span className="font-bold text-purple-400">WRAITH</span> <br /> <span className="text-cyan-500/60">neutraliza</span> <br /> <span className="font-bold text-red-400">TITAN</span>
+              <span className="font-bold text-purple-400">WRAITH</span> <br /> <span className="text-cyan-500/60">neutralizes</span> <br /> <span className="font-bold text-red-400">TITAN</span>
             </div>
           </div>
         </section>
@@ -52,22 +54,22 @@ export default function About() {
         <section className="space-y-4">
           <h2 className="text-xl font-bold uppercase tracking-wider text-cyan-300 border-b border-cyan-500/20 pb-1">// 03. PROGRESSION CALCULATION</h2>
           <p className="text-cyan-400/80 text-sm">
-            A telemetria de nível é calculada de forma determinística em <span className="text-cyan-300 italic">runtime</span> através da agregação total do histórico de experiência (XP):
+            Level telemetry is deterministically evaluated at <span className="text-cyan-300 italic">runtime</span> by aggregating total historical Experience Points (XP):
           </p>
           
           <div className="grid grid-cols-3 gap-2 text-center text-xs border border-cyan-500/20 p-3 bg-cyan-950/5">
-            <div><span className="text-green-400 font-bold">VITÓRIA</span><br/>+100 XP</div>
-            <div><span className="text-yellow-400 font-bold">EMPATE</span><br/>+30 XP</div>
-            <div><span className="text-red-400 font-bold">DERROTA</span><br/>+10 XP</div>
+            <div><span className="text-green-400 font-bold">VICTORY</span><br/>+100 XP</div>
+            <div><span className="text-yellow-400 font-bold">DRAW</span><br/>+30 XP</div>
+            <div><span className="text-red-400 font-bold">DEFEAT</span><br/>+10 XP</div>
           </div>
 
           <div className="border border-cyan-400/30 p-4 bg-black/50 space-y-2">
-            <span className="text-xs uppercase tracking-widest text-cyan-300 block font-bold">// EQUAÇÃO ALGORÍTMICA:</span>
+            <span className="text-xs uppercase tracking-widest text-cyan-300 block font-bold">// ALGORITHMIC EQUATION:</span>
             <code className="text-xs text-cyan-200 block bg-cyan-950/40 p-2 border-l-2 border-cyan-400">
-              Nível = Math.floor(XP_Total / 400) + 1
+              Level = Math.floor(Total_XP / 400) + 1
             </code>
             <p className="text-cyan-400/60 text-xs pt-1">
-              * Nota de segurança: O nível nunca é armazenado de forma estática na base de dados, garantindo a integridade dos dados face a manipulações externas.
+              * Security Note: User levels are never statically stored in the database, preventing external tampering and ensuring data integrity.
             </p>
           </div>
         </section>
@@ -79,9 +81,9 @@ export default function About() {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-cyan-500/30 bg-cyan-950/20 uppercase tracking-wider text-cyan-300">
-                  <th className="p-3 w-24">Nível</th>
-                  <th className="p-3 w-44">Emblema</th>
-                  <th className="p-3">Diretiva / Significado</th>
+                  <th className="p-3 w-24">Required</th>
+                  <th className="p-3 w-44">Badge Badge</th>
+                  <th className="p-3">Directive / Significance</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-cyan-500/10">
