@@ -30,6 +30,8 @@ import Groups from "@/pages/groups";
 import GroupDetail from "@/pages/group-detail";
 import MatchDetail from "@/pages/match-detail";
 import NotFound from "@/pages/not-found";
+import PrivacyPolicy from "./pages/privacy-policy";
+import TermsOfService from "./pages/terms-of-service";
 
 const queryClient = new QueryClient();
 
@@ -111,6 +113,10 @@ function App() {
               <Route path="/game">
                 <ProtectedRoute><Game /></ProtectedRoute>
               </Route>
+
+              {/* NOVAS ROTAS: Sem layout e públicas (fora do ProtectedRoute) */}
+              <Route path="/privacy-policy" component={PrivacyPolicy} />
+              <Route path="/terms-of-service" component={TermsOfService} />
 
               {/* Rota CURINGA para TODAS as outras páginas com layout */}
               <Route path="/" nest>
