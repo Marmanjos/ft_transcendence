@@ -62,9 +62,21 @@ export default function Home() {
         </motion.div>
       </div>
 
-      {/* <div className="absolute bottom-8 w-full text-center z-10">
-
-      </div> */}
+      <div className="absolute bottom-8 w-full text-center z-10">
+        <button
+          className="text-cyan-400 font-mono tracking-widest uppercase neon-text hover:text-cyan-300 transition-colors"
+          onClick={() => setLocation("/privacy-policy")}
+        >
+          Privacy Policy
+        </button>
+        <span className="mx-4 text-cyan-400 font-mono tracking-widest uppercase neon-text"> | </span>
+        <button
+          className="text-cyan-400 font-mono tracking-widest uppercase neon-text hover:text-cyan-300 transition-colors"
+          onClick={() => setLocation("/terms-of-service")}
+        >
+          Terms of Service
+        </button>
+      </div>
     </div>
   );
 }
