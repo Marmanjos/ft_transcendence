@@ -32,6 +32,7 @@ import MatchDetail from "@/pages/match-detail";
 import NotFound from "@/pages/not-found";
 import PrivacyPolicy from "./pages/privacy-policy";
 import TermsOfService from "./pages/terms-of-service";
+import About from "./pages/about";
 
 const queryClient = new QueryClient();
 
@@ -117,6 +118,7 @@ function App() {
               {/* NOVAS ROTAS: Sem layout e públicas (fora do ProtectedRoute) */}
               <Route path="/privacy-policy" component={PrivacyPolicy} />
               <Route path="/terms-of-service" component={TermsOfService} />
+              <Route path="/about" component={About} />
 
               {/* Rota CURINGA para TODAS as outras páginas com layout */}
               <Route path="/" nest>

@@ -76,6 +76,13 @@ export default function Home() {
         >
           Terms of Service
         </button>
+        <span className="mx-4 text-cyan-400 font-mono tracking-widest uppercase neon-text"> | </span>
+        <button
+          className="text-cyan-400 font-mono tracking-widest uppercase neon-text hover:text-cyan-300 transition-colors"
+          onClick={() => setLocation("/about")}
+        >
+          About
+        </button>
       </div>
     </div>
   );
