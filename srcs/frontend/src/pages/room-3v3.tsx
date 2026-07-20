@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Copy, LogIn, Plus, Users } from "lucide-react";
+import { ArrowLeft, Copy, LogIn, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { useWs, type ServerMsg } from "@/hooks/use-ws";
+import { type ServerMsg } from "@/hooks/use-ws";
+import { useWsContext } from "@/contexts/ws-context";
 import { clearRoomSession, loadRoomSession, saveRoomSession } from "@/lib/room-session";
 
 interface RoomState {
@@ -21,9 +22,9 @@ const ROOM_PATH = "/room/3v3" as const;
 
 export default function Room3v3Page() {
   const [, setLocation] = useLocation();
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const { send, onMessage, connected } = useWs(token);
+  const { send, onMessage, connected } = useWsContext();
 
   const searchParams = new URLSearchParams(window.location.search);
   const initialCode = searchParams.get("code")?.trim().toUpperCase() ?? "";
@@ -193,7 +194,14 @@ export default function Room3v3Page() {
               Cria uma sala, entra com um código e depois ficas apenas na sala ativa até saires ou a apagares.
             </p>
           </div>
-          
+          <Button
+            onClick={() => setLocation("/lobby")}
+            disabled={roomViewActive}
+            variant="outline"
+            className="uppercase tracking-widest font-bold border-red-400/40 text-red-400 hover:bg-red-950/40 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
+          </Button>
         </div>
 
         {!roomViewActive ? (

@@ -87,8 +87,8 @@ export default function Game() {
           keepalive: true
         });
       }
-    } catch (err) {
-      console.error("Erro ao abandonar partida", err);
+    } catch {
+      // Error already handled on server
     }
     setLocation("/lobby");
   };
@@ -244,7 +244,9 @@ export default function Game() {
           headers: {
             "Authorization": `Bearer ${token}`
           }
-        }).catch((err) => console.error("Erro ao abandonar partida anterior", err));
+        }).catch(() => {
+          // Error already handled on server
+        });
       }
       const newMatch = await createMatch.mutateAsync({
         data: { 

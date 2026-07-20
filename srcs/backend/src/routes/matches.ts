@@ -249,10 +249,17 @@ router.post("/matches/:id/abandon", requireAuth, async (req, res): Promise<void>
     return;
   }
 
+  const userId = req.user!.userId;
   const [match] = await db
     .select()
     .from(matchesTable)
-    .where(and(eq(matchesTable.id, params.data.id), eq(matchesTable.player1Id, req.user!.userId)))
+    .where(and(
+      eq(matchesTable.id, params.data.id),
+      or(
+        eq(matchesTable.player1Id, userId),
+        eq(matchesTable.player2Id, userId)
+      )
+    ))
     .limit(1);
 
   if (!match) {
@@ -265,10 +272,19 @@ router.post("/matches/:id/abandon", requireAuth, async (req, res): Promise<void>
     return;
   }
 
+  // When a player abandons, they lose. Determine the winner (the other player).
+  let winnerId: number | null = null;
+  if (userId === match.player1Id) {
+    winnerId = match.player2Id ?? null; // PvP: player2 wins, AI: null (AI wins)
+  } else {
+    winnerId = match.player1Id; // player2 abandons, player1 wins
+  }
+
   await db
     .update(matchesTable)
     .set({
       status: "ABANDONED",
+      winnerId,
       completedAt: new Date(),
     })
     .where(eq(matchesTable.id, match.id));

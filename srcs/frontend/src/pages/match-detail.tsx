@@ -49,12 +49,12 @@ export default function MatchDetail({ id }: { id: number }) {
             <div className="text-4xl md:text-6xl font-black bg-background px-6 py-2 rounded-lg border-2 border-border mb-2">
               {match.player1Score} <span className="text-muted-foreground text-2xl mx-2">-</span> {match.player2Score}
             </div>
-            {match.status === MatchStatus.COMPLETED && (
+            {(match.status === MatchStatus.COMPLETED || match.status === MatchStatus.ABANDONED) && (
               <div className={`text-lg font-bold uppercase tracking-widest px-4 py-1 rounded
-                ${user && match.winnerId === user.id ? 'bg-primary/20 text-primary' : 
-                  match.winnerId === null ? 'bg-muted text-muted-foreground' : 
+                ${match.winnerId === match.player1Id ? 'bg-primary/20 text-primary' :
+                  match.player1Score === match.player2Score && match.status === MatchStatus.COMPLETED ? 'bg-muted text-muted-foreground' :
                   'bg-destructive/20 text-destructive'}`}>
-                {user && match.winnerId === user.id ? 'Vencedor' : match.winnerId === null ? 'Empate' : 'Derrotado'}
+                {match.winnerId === match.player1Id ? 'Vencedor' : match.player1Score === match.player2Score && match.status === MatchStatus.COMPLETED ? 'Empate' : 'Derrotado'}
               </div>
             )}
           </div>

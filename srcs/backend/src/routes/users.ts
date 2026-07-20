@@ -197,16 +197,34 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
     );
 
   let wins = 0, losses = 0, draws = 0;
+  let multiplayerXP = 0;
   for (const match of completedMatches) {
-    if (match.winnerId === userId) {
-      wins++;
-    } else if (match.winnerId !== null) {
-      losses++;
-    } else {
-      if (match.mode === "SINGLE_PLAYER" && match.player2Score > match.player1Score) {
+    if (match.mode === "MULTIPLAYER") {
+      // 3v3 matches: XP based on player1Score (which stores final score ranging -6 to +6)
+      // Formula: max(0, 75 + score * 25)
+      // Score +6: 225 XP | Score +3: 150 XP | Score 0: 75 XP | Score -3: 0 XP
+      multiplayerXP += Math.max(0, 75 + match.player1Score * 25);
+
+      // Still count for stats (win = higher score than opponents)
+      if (match.winnerId === userId) {
+        wins++;
+      } else if (match.winnerId !== null) {
         losses++;
       } else {
         draws++;
+      }
+    } else {
+      // 1v1 and AI matches
+      if (match.winnerId === userId) {
+        wins++;
+      } else if (match.winnerId !== null) {
+        losses++;
+      } else {
+        if (match.mode === "SINGLE_PLAYER" && match.player2Score > match.player1Score) {
+          losses++;
+        } else {
+          draws++;
+        }
       }
     }
   }
@@ -214,8 +232,16 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
   const totalMatches = completedMatches.length;
   const winRate = totalMatches > 0 ? wins / totalMatches : 0;
 
-const temporaryXP = (wins * 100) + (draws * 30);
+const singleplayerMatches = completedMatches.filter(m => m.mode !== "MULTIPLAYER");
+const singleplayerWins = singleplayerMatches.filter(m => m.winnerId === userId).length;
+const singleplayerDraws = singleplayerMatches.filter(m => m.winnerId === null && !(m.mode === "SINGLE_PLAYER" && m.player2Score > m.player1Score)).length;
+
+const temporaryXP = (singleplayerWins * 100) + (singleplayerDraws * 30) + multiplayerXP;
 const userLevel = Math.max(1, Math.floor(temporaryXP / 1000) + 1);
+const xpForCurrentLevel = (userLevel - 1) * 1000;
+const xpForNextLevel = userLevel * 1000;
+const currentLevelXP = temporaryXP - xpForCurrentLevel;
+const xpNeededForNextLevel = xpForNextLevel - xpForCurrentLevel;
 
   // Filtragem dinâmica de conquistas com base no nível calculado
   const unlockedBadges = STATIC_BADGES.filter(badge => userLevel >= badge.levelRequired);
@@ -249,8 +275,11 @@ const userLevel = Math.max(1, Math.floor(temporaryXP / 1000) + 1);
     totalMatches,
     winRate,
     favoriteElemental,
-    level: userLevel,       // Injetado dinamicamente
-    badges: unlockedBadges, // Injetado dinamicamente
+    level: userLevel,
+    badges: unlockedBadges,
+    totalXP: temporaryXP,
+    currentLevelXP,
+    xpNeededForNextLevel,
   });
 });
 

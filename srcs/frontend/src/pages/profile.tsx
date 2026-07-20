@@ -71,7 +71,8 @@ export default function Profile({ id }: { id: number }) {
       toast({ title: "Solicitação enviada", description: "Convite de amizade enviado!" });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
     } catch (err: any) {
-      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
+      const errorMessage = err?.response?.data?.error || "Não foi possível enviar solicitação.";
+      toast({ title: "Erro", description: errorMessage, variant: "destructive" });
     }
   };
 
@@ -90,8 +91,9 @@ export default function Profile({ id }: { id: number }) {
 
       toast({ title: "Amizade aceita", description: "Agora vocês são amigos!" });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
-    } catch (err) {
-      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.error || "Não foi possível aceitar a solicitação.";
+      toast({ title: "Erro", description: errorMessage, variant: "destructive" });
     }
   };
 
@@ -110,8 +112,9 @@ export default function Profile({ id }: { id: number }) {
 
       toast({ title: isRequest ? "Solicitação removida" : "Amigo removido", description: isRequest ? "A solicitação foi cancelada/rejeitada." : "Usuário removido da lista de amigos." });
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
-    } catch (err) {
-      toast({ title: "Erro", description: "Falha na ligação com o servidor.", variant: "destructive" });
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.error || "Não foi possível concluir a ação.";
+      toast({ title: "Erro", description: errorMessage, variant: "destructive" });
     }
   };
 
@@ -177,18 +180,26 @@ const handleSave = async () => {
       }
     }
 
-    // Invalidar queries
-    queryClient.invalidateQueries({ queryKey: ["/api/users", user.id] });
-    queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/users", user.id, "stats"] });
+    queryClient.invalidateQueries({
+      queryKey: ["/api/users", user.id],
+    });
+
+    queryClient.invalidateQueries({
+      queryKey: ["/api/users", user.id, "stats"],
+    });
 
     toast({
       title: "Perfil atualizado",
-      description: "Perfil atualizado com sucesso.",
+      description: "Username alterado com sucesso.",
     });
 
     setIsEditOpen(false);
     resetAvatarState();
+
+    // Invalidar queries
+    queryClient.invalidateQueries({ queryKey: ["/api/users", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users", user.id, "stats"] });
   } catch (error: any) {
     let description = "Algo correu mal.";
 
@@ -204,7 +215,7 @@ const handleSave = async () => {
       } else if (typeof data === "string") {
         description = data;
       }
-    } 
+    }
     // Captura o erro manual lançado pelo 'throw new Error' ali de cima
     else if (error instanceof Error) {
       description = error.message;
@@ -349,11 +360,29 @@ const handleSave = async () => {
       {/* --- NOVA SECÇÃO: CONQUISTAS E NÍVEL (ACIMA DAS ESTATÍSTICAS) --- */}
       <Card className="bg-card/30 border-primary/20 backdrop-blur">
         <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="text-center sm:text-left">
+          <div className="text-center sm:text-left flex-1">
             <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Nível de Combate</p>
-            <div className="flex items-baseline justify-center sm:justify-start gap-1">
+            <div className="flex items-baseline justify-center sm:justify-start gap-1 mb-4">
               <span className="text-5xl font-black text-primary neon-text">LVL</span>
               <span className="text-6xl font-black text-white">{(stats as any)?.level || 1}</span>
+            </div>
+
+            {/* XP Progress Bar */}
+            <div className="w-full max-w-xs mx-auto sm:mx-0">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Experiência</span>
+                <span className="text-xs font-mono font-bold text-primary">
+                  {(stats as any)?.currentLevelXP || 0} / {(stats as any)?.xpNeededForNextLevel || 1000} XP
+                </span>
+              </div>
+              <div className="w-full bg-background/40 border border-primary/20 rounded-full h-3 overflow-hidden shadow-lg">
+                <div
+                  className="h-full bg-gradient-to-r from-primary via-cyan-400 to-primary transition-all duration-500 rounded-full shadow-[0_0_12px_rgba(14,165,233,0.6)]"
+                  style={{
+                    width: `${Math.min(100, ((stats as any)?.currentLevelXP || 0) / ((stats as any)?.xpNeededForNextLevel || 1000) * 100)}%`
+                  }}
+                />
+              </div>
             </div>
           </div>
 

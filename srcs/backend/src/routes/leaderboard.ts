@@ -25,7 +25,7 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
         .select()
         .from(matchesTable)
         .where(
-          sql`(${matchesTable.player1Id} = ${user.id} OR ${matchesTable.player2Id} = ${user.id}) AND ${matchesTable.status} = 'COMPLETED'`
+          sql`(${matchesTable.player1Id} = ${user.id} OR ${matchesTable.player2Id} = ${user.id}) AND (${matchesTable.status} = 'COMPLETED' OR ${matchesTable.status} = 'ABANDONED')`
         );
 
       let wins = 0, losses = 0;
@@ -83,12 +83,12 @@ router.get("/arena/summary", async (_req, res): Promise<void> => {
   const [matchesTodayResult] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(matchesTable)
-    .where(sql`${matchesTable.createdAt} >= ${today} AND ${matchesTable.status} = 'COMPLETED'`);
+    .where(sql`${matchesTable.createdAt} >= ${today} AND (${matchesTable.status} = 'COMPLETED' OR ${matchesTable.status} = 'ABANDONED')`);
 
   const [totalMatchesResult] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(matchesTable)
-    .where(sql`${matchesTable.status} = 'COMPLETED'`);
+    .where(sql`${matchesTable.status} = 'COMPLETED' OR ${matchesTable.status} = 'ABANDONED'`);
 
   const [activeMatchesResult] = await db
     .select({ count: sql<number>`COUNT(*)::int` })

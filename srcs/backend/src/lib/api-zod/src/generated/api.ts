@@ -113,7 +113,8 @@ export const updateUserBodyUsernameMax = 20;
 
 export const UpdateUserBody = zod.object({
   "username": zod.string().min(updateUserBodyUsernameMin).max(updateUserBodyUsernameMax).optional(),
-  "avatarUrl": zod.string().nullish()
+  "avatarUrl": zod.string().nullish(),
+  "email": zod.string().email().optional()
 })
 
 export const UpdateUserResponse = zod.object({
