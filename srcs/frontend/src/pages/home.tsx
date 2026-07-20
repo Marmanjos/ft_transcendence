@@ -62,11 +62,9 @@ export default function Home() {
         </motion.div>
       </div>
 
-      <div className="absolute bottom-8 w-full text-center z-10">
-        <p className="text-xs text-muted-foreground font-mono uppercase tracking-widest">
-          SISTEMA OPERACIONAL VERSÃO 1.0.0
-        </p>
-      </div>
+      {/* <div className="absolute bottom-8 w-full text-center z-10">
+
+      </div> */}
     </div>
   );
 }
