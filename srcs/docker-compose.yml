@@ -31,11 +31,6 @@ services:
 
 volumes:
   backend_data:
-      driver: local
-      driver_opts:
-        type: none
-        o: bind
-        device: ${HOME}/data/backend
 
 
 networks:
