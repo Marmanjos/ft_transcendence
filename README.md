@@ -222,9 +222,7 @@ The application uses a relational schema centered on users, game sessions, socia
   - Contributed to the project documentation and public-facing pages, helping improve the overall presentation and user-facing experience.
 
 - mvidal
-  - Played a central role in the stability and evolution of the game logic.
-  - Contributed to match flow, abandonment/disconnection handling, profile and history features, and image upload limits.
-  - Also took responsibility for DevOps and Docker integration, helping connect the project infrastructure and deployment workflow.
+  - Contributed to match flow, abandonment/disconnection handling, profile and history features image upload limits, notification system and Docker integration.
 
 - mdiniz
   - Contributed to backend validation, error handling, and profile-related improvements, helping make the application more robust and consistent.
