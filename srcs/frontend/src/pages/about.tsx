@@ -60,7 +60,6 @@ export default function About() {
           <div className="grid grid-cols-3 gap-2 text-center text-xs border border-cyan-500/20 p-3 bg-cyan-950/5">
             <div><span className="text-green-400 font-bold">VICTORY</span><br/>+100 XP</div>
             <div><span className="text-yellow-400 font-bold">DRAW</span><br/>+30 XP</div>
-            <div><span className="text-red-400 font-bold">DEFEAT</span><br/>+10 XP</div>
           </div>
 
           <div className="border border-cyan-400/30 p-4 bg-black/50 space-y-2">
