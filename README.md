@@ -203,25 +203,25 @@ The application uses a relational schema centered on users, game sessions, socia
     - Clear rules and progression mechanic
 
 ### Module Summary
-- Total points: 20
+- Total points: 21
 - Major modules: 14 points
 - Minor modules: 7 points
 
 ## Individual Contributions
 
-- Alfredo (alde-jes)
+- alde-jes
   - Responsible for starting the project and taking it to a basic level.
   - Because he was the most skilled and experienced among us, he ensured that we had a solid foundation that allowed us to evolve closer to what we intended.
   - This helped prevent us from getting lost during the process.
   - He also served as a constant support throughout all stages of the project and helped us whenever we had difficulties delivering our tasks.
 
-- lquimuan
-  - Contributed to the project documentation and public-facing pages, helping improve the overall presentation and user-facing experience.
-
 - atambo
   - Focused on multiplayer game flow, 3v3 support, matchmaking-related behavior, WebSocket integration, and HTTPS setup.
 
-- Marcio Vidal (also known as mvidal / vidal-m)
+- lquimuan
+  - Contributed to the project documentation and public-facing pages, helping improve the overall presentation and user-facing experience.
+
+- mvidal
   - Played a central role in the stability and evolution of the game logic.
   - Contributed to match flow, abandonment/disconnection handling, profile and history features, and image upload limits.
   - Also took responsibility for DevOps and Docker integration, helping connect the project infrastructure and deployment workflow.
