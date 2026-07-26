@@ -65,7 +65,7 @@ export default function About() {
           <div className="border border-cyan-400/30 p-4 bg-black/50 space-y-2">
             <span className="text-xs uppercase tracking-widest text-cyan-300 block font-bold">// ALGORITHMIC EQUATION:</span>
             <code className="text-xs text-cyan-200 block bg-cyan-950/40 p-2 border-l-2 border-cyan-400">
-              Level = Math.floor(Total_XP / 400) + 1
+              Level = Math.floor(Total_XP / 1000) + 1
             </code>
             <p className="text-cyan-400/60 text-xs pt-1">
               * Security Note: User levels are never statically stored in the database, preventing external tampering and ensuring data integrity.
